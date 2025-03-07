@@ -1,27 +1,12 @@
 # QuickReply AI
 
-An AI-powered email response generator that helps you craft professional responses quickly and efficiently.
+AI-powered email response generator that helps you craft professional responses quickly.
 
-## Features
-
-- 🔒 Secure authentication with Supabase
-- ✉️ AI-powered email response generation
-- 📊 Analytics dashboard
-- 💳 Subscription management
-- 🎨 Modern UI with Tailwind CSS
-
-## Getting Started
-
-### Prerequisites
-
-- Node.js 14.x or later
-- npm 6.x or later
-
-### Installation
+## Quick Start
 
 1. Clone the repository:
 ```bash
-git clone https://github.com/yourusername/quickreply-ai.git
+git clone https://github.com/Anthony-Michael/quickreply-ai.git
 cd quickreply-ai
 ```
 
@@ -30,20 +15,41 @@ cd quickreply-ai
 npm install
 ```
 
-3. Create environment variables:
-```bash
-cp .env.example .env
+3. Create `.env` file with required environment variables:
+```
+REACT_APP_SUPABASE_URL=your_supabase_url
+REACT_APP_SUPABASE_ANON_KEY=your_supabase_anon_key
+REACT_APP_OPENAI_API_KEY=your_openai_api_key
 ```
 
-4. Update the `.env` file with your credentials:
-- Add your Supabase URL and anon key
-- Add your OpenAI API key
-- Add your Stripe publishable key (if using subscriptions)
-
-5. Start the development server:
+4. Start the development server:
 ```bash
 npm start
 ```
+
+## Available Scripts
+
+- `npm start` - Run the development server
+- `npm test` - Run tests
+- `npm run build` - Build for production
+- `npm run lint` - Check code style
+- `npm run format` - Format code
+
+## Tech Stack
+
+- React
+- Supabase (Authentication & Database)
+- OpenAI GPT
+- React Router
+- Tailwind CSS
+
+## Features
+
+- 🔒 Secure authentication with Supabase
+- ✉️ AI-powered email response generation
+- 📊 Analytics dashboard
+- 💳 Subscription management
+- 🎨 Modern UI with Tailwind CSS
 
 ## Environment Variables
 
@@ -55,15 +61,6 @@ REACT_APP_SUPABASE_ANON_KEY=your_supabase_anon_key
 REACT_APP_OPENAI_API_KEY=your_openai_api_key
 REACT_APP_STRIPE_PUBLISHABLE_KEY=your_stripe_publishable_key (optional)
 ```
-
-## Tech Stack
-
-- React
-- Supabase (Authentication & Database)
-- OpenAI GPT
-- Tailwind CSS
-- React Router
-- Stripe (Optional)
 
 ## License
 
