@@ -1,13 +1,12 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
-import { useEffect, useState } from 'react';
 import { supabase } from './lib/supabase';
 
 // Import components
-import Dashboard from './Dashboard';
-import EmailComposer from './EmailComposer';
-import SubscriptionManagement from './SubscriptionManagement';
-import Auth from './Auth';
+import Dashboard from './components/Dashboard';
+import EmailComposer from './components/EmailComposer';
+import SubscriptionManagement from './components/SubscriptionManagement';
+import Auth from './components/Auth';
 
 // Protected Route wrapper component
 const ProtectedRoute = ({ children }) => {
