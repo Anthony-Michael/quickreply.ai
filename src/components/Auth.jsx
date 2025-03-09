@@ -7,48 +7,72 @@ const Auth = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [view, setView] = useState('sign-in'); // 'sign-in', 'sign-up', 'forgot-password'
+  const [errorMessage, setErrorMessage] = useState('');
+  const [successMessage, setSuccessMessage] = useState('');
 
-  const handleSignIn = async (e) => {
+  const handleSignIn = async e => {
     e.preventDefault();
     setLoading(true);
-    
+    setErrorMessage('');
+    setSuccessMessage('');
+
+    console.log('Attempting to sign in with:', { email });
+
     try {
-      const { error } = await supabase.auth.signInWithPassword({
+      console.log('Calling Supabase auth.signInWithPassword...');
+      const { data, error } = await supabase.auth.signInWithPassword({
         email,
         password,
       });
-      
-      if (error) throw error;
+
+      console.log('Sign-in response:', { data, error });
+
+      if (error) {
+        throw error;
+      }
+
+      if (data?.user) {
+        console.log('Sign-in successful for user:', data.user);
+        setSuccessMessage('Sign-in successful! Redirecting...');
+        // Manually redirect since automatic redirect might not be working
+        setTimeout(() => {
+          window.location.href = '/dashboard';
+        }, 1000);
+      }
     } catch (error) {
-      alert(error.message);
+      console.error('Sign-in error:', error);
+      setErrorMessage(error.message || 'Failed to sign in');
     } finally {
       setLoading(false);
     }
   };
 
-  const handleSignUp = async (e) => {
+  const handleSignUp = async e => {
     e.preventDefault();
     setLoading(true);
-    
+    setErrorMessage('');
+    setSuccessMessage('');
+
     try {
       const { error } = await supabase.auth.signUp({
         email,
         password,
       });
-      
+
       if (error) throw error;
-      alert('Check your email for the confirmation link!');
+      setSuccessMessage('Check your email for the confirmation link!');
     } catch (error) {
-      alert(error.message);
+      console.error('Sign-up error:', error);
+      setErrorMessage(error.message || 'Failed to sign up');
     } finally {
       setLoading(false);
     }
   };
 
-  const handlePasswordReset = async (e) => {
+  const handlePasswordReset = async e => {
     e.preventDefault();
     setLoading(true);
-    
+
     try {
       const { error } = await supabase.auth.resetPasswordForEmail(email);
       if (error) throw error;
@@ -65,11 +89,25 @@ const Auth = () => {
       <div className="text-center">
         <h1 className="text-2xl font-bold">AI Email Responder</h1>
         <p className="mt-2 text-gray-600">
-          {view === 'sign-in' ? 'Sign in to your account' :
-           view === 'sign-up' ? 'Create a new account' :
-           'Reset your password'}
+          {view === 'sign-in'
+            ? 'Sign in to your account'
+            : view === 'sign-up'
+              ? 'Create a new account'
+              : 'Reset your password'}
         </p>
       </div>
+
+      {errorMessage && (
+        <div className="p-3 text-sm text-red-700 bg-red-100 border border-red-300 rounded">
+          {errorMessage}
+        </div>
+      )}
+
+      {successMessage && (
+        <div className="p-3 text-sm text-green-700 bg-green-100 border border-green-300 rounded">
+          {successMessage}
+        </div>
+      )}
 
       <form className="mt-8 space-y-6">
         <div>
@@ -82,7 +120,7 @@ const Auth = () => {
             type="email"
             required
             value={email}
-            onChange={(e) => setEmail(e.target.value)}
+            onChange={e => setEmail(e.target.value)}
             className="block w-full px-3 py-2 mt-1 border border-gray-300 rounded-md shadow-sm"
             placeholder="you@example.com"
           />
@@ -99,7 +137,7 @@ const Auth = () => {
               type="password"
               required
               value={password}
-              onChange={(e) => setPassword(e.target.value)}
+              onChange={e => setPassword(e.target.value)}
               className="block w-full px-3 py-2 mt-1 border border-gray-300 rounded-md shadow-sm"
               placeholder="••••••••"
             />
@@ -117,7 +155,7 @@ const Auth = () => {
               {loading ? 'Loading...' : 'Sign in'}
             </button>
           )}
-          
+
           {view === 'sign-up' && (
             <button
               type="submit"
@@ -128,7 +166,7 @@ const Auth = () => {
               {loading ? 'Loading...' : 'Sign up'}
             </button>
           )}
-          
+
           {view === 'forgot-password' && (
             <button
               type="submit"
