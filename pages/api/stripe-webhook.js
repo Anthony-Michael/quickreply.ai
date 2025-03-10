@@ -1,6 +1,7 @@
 import Stripe from 'stripe';
 import { buffer } from 'micro';
 import { supabaseAdmin } from './utils/supabase-admin';
+import { corsMiddleware } from './cors-middleware';
 
 // Initialize Stripe with the secret key
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
@@ -39,7 +40,8 @@ const ALLOWED_EVENTS = [
   'customer.subscription.deleted',
 ];
 
-export default async function handler(req, res) {
+// Define the handler function that will be wrapped with CORS middleware
+const stripeWebhookHandler = async (req, res) => {
   // Only allow POST method
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
@@ -262,7 +264,10 @@ export default async function handler(req, res) {
     
     return res.status(500).json({ error: 'Failed to process webhook' });
   }
-}
+};
+
+// Export the wrapped handler with CORS middleware
+export default corsMiddleware(stripeWebhookHandler);
 
 /**
  * Updates a user's subscription details in Supabase

@@ -1,4 +1,5 @@
 import { supabaseAdmin, authenticateRequest } from './utils/supabase-admin';
+import { corsMiddleware } from './cors-middleware';
 
 // Mock response generator for development use
 function generateMockResponse(customerEmail, businessName, tone) {
@@ -196,7 +197,13 @@ async function incrementUserResponseCount(userId, currentUsage) {
   return { success: true };
 }
 
-export default async function handler(req, res) {
+// Function to handle non-streaming API calls when needed
+export async function callOpenAiApi(prompt, options = {}) {
+  // ... existing code ...
+}
+
+// Convert the default export to a named handler that can be wrapped with CORS middleware
+const openaiHandler = async (req, res) => {
   // Only accept POST requests
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
@@ -325,7 +332,10 @@ export default async function handler(req, res) {
     console.error('Error in request processing:', error);
     return res.status(500).json({ error: 'Failed to process request. Please try again later.' });
   }
-}
+};
+
+// Export the handler with CORS middleware
+export default corsMiddleware(openaiHandler);
 
 // Helper functions to extract information from emails
 function extractSubject(email) {
