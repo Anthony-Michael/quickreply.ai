@@ -1,9 +1,11 @@
 import React, { useState, useEffect } from 'react';
+import { useUser, useSupabaseClient } from '@supabase/auth-helpers-react';
 import { generateEmailResponse } from '../lib/openai';
-import { supabase } from '../lib/supabase';
-import { Link } from 'react-router-dom';
+import Link from 'next/link';
 
 const EmailComposer = () => {
+  const user = useUser();
+  const supabase = useSupabaseClient();
   const [loading, setLoading] = useState(false);
   const [customerEmail, setCustomerEmail] = useState('');
   const [businessContext, setBusinessContext] = useState('');
@@ -17,24 +19,58 @@ const EmailComposer = () => {
   const [businessName, setBusinessName] = useState('');
   const [responseHistory, setResponseHistory] = useState([]);
   const [loadingHistory, setLoadingHistory] = useState(false);
+  const [devMode] = useState(process.env.NEXT_PUBLIC_DEV_MODE === 'true');
 
   // Fetch response history on component mount
   useEffect(() => {
-    fetchResponseHistory();
-  }, []);
+    if (user || devMode) {
+      fetchResponseHistory();
+    }
+  }, [user, devMode]);
 
   // Function to fetch the user's last 5 email responses
   const fetchResponseHistory = async () => {
+    if (!user && !devMode) {
+      console.warn('User not authenticated, cannot fetch response history');
+      return;
+    }
+    
     try {
       setLoadingHistory(true);
       
-      const { data: { session } } = await supabase.auth.getSession();
-      
-      if (!session) {
-        console.warn('User not authenticated, cannot fetch response history');
+      // Use mock data in development mode
+      if (devMode) {
+        // Simulate network delay
+        await new Promise(resolve => setTimeout(resolve, 800));
+        
+        // Return mock history data
+        setResponseHistory([
+          {
+            id: 'mock-1',
+            created_at: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000).toISOString(),
+            customer_email: 'I recently purchased your product and have some questions about the features. Can you help?',
+            generated_response: 'Thank you for your recent purchase! I\'d be happy to answer any questions you have about our product features.',
+            tone_requested: 'friendly'
+          },
+          {
+            id: 'mock-2',
+            created_at: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(),
+            customer_email: 'I would like to request a refund for my recent order #12345.',
+            generated_response: 'I understand you would like a refund for order #12345. We can process this request immediately for you.',
+            tone_requested: 'professional'
+          },
+          {
+            id: 'mock-3',
+            created_at: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString(),
+            customer_email: 'Your product arrived damaged. I expect immediate resolution.',
+            generated_response: 'We sincerely apologize that your product arrived damaged. We take this matter very seriously and will resolve this immediately.',
+            tone_requested: 'empathetic'
+          }
+        ]);
         return;
       }
       
+      // Otherwise try to fetch real data
       const { data, error } = await supabase
         .from('email_history')
         .select('id, created_at, customer_email, generated_response, tone_requested')
@@ -88,12 +124,35 @@ const EmailComposer = () => {
       return;
     }
 
+    if (!user && !devMode) {
+      setError('You must be logged in to generate responses');
+      return;
+    }
+
     setLoading(true);
     setError('');
     setShowUpgradeModal(false);
 
     try {
-      const result = await generateEmailResponse(customerEmail, businessContext, tone);
+      let token = 'dev-mode-token';
+
+      // Get real token if not in dev mode
+      if (!devMode) {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session) {
+          setError('Your session has expired. Please log in again.');
+          setLoading(false);
+          return;
+        }
+        token = session.access_token;
+      }
+
+      const result = await generateEmailResponse(
+        customerEmail, 
+        businessContext, 
+        tone, 
+        token
+      );
       
       // Handle the enhanced response object
       const { response, businessName: responseBusiness } = result;
@@ -177,46 +236,45 @@ const EmailComposer = () => {
 
   // Add the upgrade modal component
   const UpgradeModal = () => {
-    if (!showUpgradeModal) return null;
-
     return (
-      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-        <div className="bg-white rounded-lg p-8 max-w-md w-full">
-          <div className="text-center mb-6">
-            <div className="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-yellow-100 mb-4">
-              <svg className="h-6 w-6 text-yellow-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
-              </svg>
-            </div>
+      <div className="fixed inset-0 bg-gray-600 bg-opacity-75 flex items-center justify-center z-50 p-4">
+        <div className="bg-white rounded-lg shadow-xl max-w-md w-full p-6">
+          <div className="mb-4">
             <h3 className="text-lg font-medium text-gray-900">Subscription Limit Reached</h3>
-            <div className="mt-2">
-              <p className="text-sm text-gray-500">
-                You've used {usageLimitInfo?.currentUsage || 0} of your {usageLimitInfo?.limit || 0} monthly email responses.
-              </p>
-            </div>
+            <p className="mt-1 text-sm text-gray-500">
+              You've reached your monthly limit of {usageLimitInfo?.limit} email responses on your {usageLimitInfo?.tier} plan.
+            </p>
           </div>
 
-          <div className="bg-gray-50 p-4 rounded-md mb-6">
-            <h4 className="font-medium text-gray-900 text-sm mb-2">Current Plan: {usageLimitInfo?.tier || 'Free'}</h4>
-            <div className="w-full bg-gray-200 rounded-full h-2.5">
-              <div 
-                className="bg-blue-600 h-2.5 rounded-full" 
-                style={{ width: `${Math.min(100, ((usageLimitInfo?.currentUsage || 0) / (usageLimitInfo?.limit || 1)) * 100)}%` }}
+          <div className="bg-gray-50 rounded-md p-3 mb-4">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-sm font-medium text-gray-700">Usage this month</span>
+              <span className="text-sm font-medium text-gray-900">
+                {usageLimitInfo?.currentUsage} / {usageLimitInfo?.limit}
+              </span>
+            </div>
+            <div className="w-full bg-gray-200 rounded-full h-2">
+              <div
+                className="bg-blue-600 h-2 rounded-full"
+                style={{
+                  width: `${Math.min(
+                    (usageLimitInfo?.currentUsage / usageLimitInfo?.limit) * 100,
+                    100
+                  )}%`,
+                }}
               ></div>
             </div>
-            <p className="mt-2 text-xs text-gray-500">
-              Upgrade your plan to generate more email responses.
-            </p>
           </div>
 
           <div className="flex flex-col space-y-3">
             <Link 
-              to="/subscription-management" 
+              href="/subscription" 
               className="w-full inline-flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
             >
               View Upgrade Options
             </Link>
             <button
+              type="button"
               onClick={() => setShowUpgradeModal(false)}
               className="w-full inline-flex justify-center py-2 px-4 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
             >
@@ -229,164 +287,165 @@ const EmailComposer = () => {
   };
 
   return (
-    <div className="max-w-4xl mx-auto p-6">
-      <h1 className="text-2xl font-bold mb-6">
-        Generate Email Response
-        {businessName && <span className="text-blue-600 ml-2">for {businessName}</span>}
-      </h1>
-      
+    <div className="max-w-4xl mx-auto p-4">
+      {/* Display error message */}
       {error && (
-        <div className="mb-4 p-4 bg-red-100 border border-red-300 text-red-700 rounded">
-          {error}
+        <div className="bg-red-100 border-l-4 border-red-500 text-red-700 p-4 mb-4" role="alert">
+          <p>{error}</p>
         </div>
       )}
-      
+
+      {/* Display success message */}
       {successMessage && (
-        <div className="mb-4 p-4 bg-green-100 border border-green-300 text-green-700 rounded">
-          {successMessage}
+        <div className="bg-green-100 border-l-4 border-green-500 text-green-700 p-4 mb-4" role="alert">
+          <p>{successMessage}</p>
         </div>
       )}
-      
-      <div className="mb-6">
-        <label htmlFor="customerEmail" className="block mb-2 font-medium">
+
+      {/* Email composer form */}
+      <h1 className="text-xl font-bold mb-4">
+        Generate Email Response {businessName && `for ${businessName}`}
+      </h1>
+
+      {/* Customer email input */}
+      <div className="mb-4">
+        <label htmlFor="customerEmail" className="block mb-2 text-sm font-medium text-gray-700">
           Customer Email
         </label>
         <textarea
           id="customerEmail"
-          rows="8"
-          className="w-full p-3 border border-gray-300 rounded-md"
-          placeholder="Paste the customer email here..."
+          className="w-full px-3 py-2 text-gray-700 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+          rows="6"
           value={customerEmail}
           onChange={(e) => setCustomerEmail(e.target.value)}
+          placeholder="Paste the customer's email here..."
         ></textarea>
       </div>
-      
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-        <div>
-          <label htmlFor="businessContext" className="block mb-2 font-medium">
-            Business Context (Optional)
-          </label>
-          <textarea
-            id="businessContext"
-            rows="3"
-            className="w-full p-3 border border-gray-300 rounded-md"
-            placeholder="Add any relevant information about your business..."
-            value={businessContext}
-            onChange={(e) => setBusinessContext(e.target.value)}
-          ></textarea>
-        </div>
-        
-        <div>
-          <label htmlFor="tone" className="block mb-2 font-medium">
-            Response Tone
-          </label>
-          <select
-            id="tone"
-            className="w-full p-3 border border-gray-300 rounded-md"
-            value={tone}
-            onChange={(e) => setTone(e.target.value)}
-          >
-            <option value="professional">Professional</option>
-            <option value="friendly">Friendly</option>
-            <option value="formal">Formal</option>
-            <option value="empathetic">Empathetic</option>
-            <option value="concise">Concise</option>
-          </select>
-        </div>
+
+      {/* Business context input */}
+      <div className="mb-4">
+        <label htmlFor="businessContext" className="block mb-2 text-sm font-medium text-gray-700">
+          Business Context (Optional)
+        </label>
+        <textarea
+          id="businessContext"
+          className="w-full px-3 py-2 text-gray-700 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+          rows="3"
+          value={businessContext}
+          onChange={(e) => setBusinessContext(e.target.value)}
+          placeholder="Add any relevant information about your business..."
+        ></textarea>
       </div>
-      
-      <div className="mb-6">
-        <button
-          className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50"
-          onClick={handleGenerate}
-          disabled={loading || !customerEmail.trim()}
+
+      {/* Tone selection */}
+      <div className="mb-4">
+        <label htmlFor="tone" className="block mb-2 text-sm font-medium text-gray-700">
+          Response Tone
+        </label>
+        <select
+          id="tone"
+          className="w-full px-3 py-2 text-gray-700 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+          value={tone}
+          onChange={(e) => setTone(e.target.value)}
         >
-          {loading ? (
-            <span className="flex items-center">
-              <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-              </svg>
-              Generating...
-            </span>
-          ) : 'Generate Email Response'}
-        </button>
+          <option value="professional">Professional</option>
+          <option value="friendly">Friendly</option>
+          <option value="formal">Formal</option>
+          <option value="empathetic">Empathetic</option>
+          <option value="concise">Concise</option>
+        </select>
       </div>
-      
+
+      {/* Generate button */}
+      <button
+        onClick={handleGenerate}
+        disabled={loading || !customerEmail.trim()}
+        className="w-full mb-6 flex justify-center items-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50"
+      >
+        {loading ? (
+          <>
+            <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+            </svg>
+            Generating...
+          </>
+        ) : (
+          'Generate Email Response'
+        )}
+      </button>
+
+      {/* Display generated response */}
       {generatedResponse && (
-        <div className="mb-6">
-          <label htmlFor="generatedResponse" className="block mb-2 font-medium">
-            Generated Response {businessName && <span className="text-blue-600 ml-1">({businessName} Style)</span>}
-          </label>
+        <div className="mt-6 border-t pt-4">
+          <h2 className="text-lg font-semibold mb-2">
+            Generated Response {businessName && `(${businessName} Style)`}
+          </h2>
           <textarea
-            id="generatedResponse"
+            className="w-full px-3 py-2 text-gray-700 border rounded-lg focus:outline-none"
             rows="8"
-            className="w-full p-3 border border-gray-300 rounded-md"
             value={editedResponse}
             onChange={(e) => setEditedResponse(e.target.value)}
           ></textarea>
-          
-          <div className="mt-4 flex space-x-4">
+          <div className="mt-2 flex flex-wrap gap-2">
             <button
-              className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700"
-              onClick={handleSaveTemplate}
-            >
-              Save as Template
-            </button>
-            
-            <button
-              className="px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-700"
               onClick={handleCopyToClipboard}
+              className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
             >
               Copy to Clipboard
+            </button>
+            <button
+              onClick={handleSaveTemplate}
+              className="inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+            >
+              Save as Template
             </button>
           </div>
         </div>
       )}
-      
-      {/* Response History Section */}
-      <div className="mt-10 border-t pt-6">
-        <h2 className="text-xl font-semibold mb-4">
-          <div className="flex items-center justify-between">
-            <span>Recent Responses</span>
-            <button 
-              onClick={fetchResponseHistory} 
-              className="text-sm text-blue-600 hover:text-blue-800"
-              disabled={loadingHistory}
-            >
-              {loadingHistory ? 'Refreshing...' : 'Refresh'}
-            </button>
-          </div>
-        </h2>
-        
+
+      {/* Recent Responses */}
+      <div className="mt-10 border-t pt-4">
+        <div className="flex justify-between items-center mb-4">
+          <h2 className="text-lg font-semibold">Recent Responses</h2>
+          <button
+            onClick={fetchResponseHistory}
+            className="text-sm text-blue-600 hover:text-blue-800 flex items-center"
+            disabled={loadingHistory}
+          >
+            {loadingHistory ? (
+              <svg className="animate-spin h-4 w-4 mr-1" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+              </svg>
+            ) : (
+              'Refresh'
+            )}
+          </button>
+        </div>
+
         {loadingHistory ? (
-          <div className="flex justify-center py-6">
-            <svg className="animate-spin h-8 w-8 text-blue-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+          <div className="text-center py-4">
+            <svg className="animate-spin h-6 w-6 mx-auto text-gray-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
               <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
               <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
             </svg>
           </div>
-        ) : responseHistory.length === 0 ? (
-          <div className="text-center py-6 text-gray-500">
-            No previous responses found. Generate your first response above!
-          </div>
-        ) : (
+        ) : responseHistory.length > 0 ? (
           <div className="space-y-4">
             {responseHistory.map((item) => (
-              <div key={item.id} className="border rounded-lg p-4 hover:bg-gray-50">
-                <div className="flex justify-between items-start mb-2">
-                  <div className="font-medium">{formatDate(item.created_at)}</div>
-                  <span className="px-2 py-1 bg-blue-100 text-blue-800 text-xs rounded-full">
+              <div key={item.id} className="border rounded-lg p-4 bg-gray-50">
+                <div className="flex justify-between mb-2">
+                  <span className="text-sm font-medium text-gray-700">
+                    {formatDate(item.created_at)}
+                  </span>
+                  <span className="text-xs px-2 py-1 rounded-full bg-blue-100 text-blue-800">
                     {item.tone_requested || 'professional'}
                   </span>
                 </div>
-                <div className="text-sm text-gray-700 mb-2">
-                  <span className="font-medium">Customer email:</span> {truncateText(item.customer_email, 120)}
-                </div>
-                <div className="text-sm text-gray-700 mb-3">
-                  <span className="font-medium">Response:</span> {truncateText(item.generated_response, 160)}
-                </div>
-                <button 
+                <p className="text-sm text-gray-600 mb-2">{truncateText(item.customer_email, 150)}</p>
+                <p className="text-sm text-gray-800 mb-3">{truncateText(item.generated_response, 200)}</p>
+                <button
                   onClick={() => loadPreviousResponse(item.customer_email, item.generated_response)}
                   className="text-sm text-blue-600 hover:text-blue-800"
                 >
@@ -395,11 +454,13 @@ const EmailComposer = () => {
               </div>
             ))}
           </div>
+        ) : (
+          <p className="text-center py-4 text-gray-500">No previous responses found. Generate your first response above!</p>
         )}
       </div>
-      
-      {/* Render the upgrade modal */}
-      <UpgradeModal />
+
+      {/* Subscription limit modal */}
+      {showUpgradeModal && <UpgradeModal />}
     </div>
   );
 };

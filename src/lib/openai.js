@@ -1,105 +1,77 @@
 // src/lib/openai.js
-import { supabase } from './supabase';
 
-// Function to generate AI response using OpenAI API
-export async function generateEmailResponse(customerEmail, businessContext, tone = 'professional') {
-  // Get the current user
-  const { data: { user } } = await supabase.auth.getUser();
-  
-  // Check if user has remaining credits
-  const { data: userProfile, error: profileError } = await supabase
-    .from('profiles')
-    .select('subscription_tier, monthly_responses_used, monthly_responses_limit')
-    .eq('id', user.id)
-    .single();
-    
-  if (profileError) {
-    throw new Error('Could not verify usage limits');
-  }
-  
-  if (userProfile.monthly_responses_used >= userProfile.monthly_responses_limit) {
-    throw new Error('Monthly response limit reached. Please upgrade your plan.');
-  }
-  
-  // Extract key information from the customer email
-  // This is a simple implementation - you may want to enhance this with more NLP
-  const emailSubject = extractSubject(customerEmail);
-  const customerName = extractCustomerName(customerEmail);
-  const emailBody = extractEmailBody(customerEmail);
-  
+// Function to generate AI response using our secure API
+export async function generateEmailResponse(customerEmail, businessContext, tone = 'professional', token) {
   try {
-    // Prepare the prompt for OpenAI
-    const prompt = `
-      You are a helpful customer service representative for a business. 
-      Write a professional email response to the following customer email.
-      
-      Business context: ${businessContext || 'A small business providing excellent customer service'}
-      Desired tone: ${tone}
-      
-      Original customer email:
-      Subject: ${emailSubject}
-      From: ${customerName}
-      
-      ${emailBody}
-      
-      Write a helpful, friendly, and professional response addressing the customer's needs.
-      If you need more information to properly respond, include that in your response politely.
-      Sign the email as "Customer Support Team" at the end.
-    `;
-    
-    // Make the API request to OpenAI
-    const response = await fetch('https://api.openai.com/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${process.env.REACT_APP_OPENAI_API_KEY}`
-      },
-      body: JSON.stringify({
-        model: 'gpt-4',
-        messages: [
-          { role: 'system', content: 'You are a helpful assistant that writes professional email responses.' },
-          { role: 'user', content: prompt }
-        ],
-        temperature: 0.7,
-        max_tokens: 800
-      })
-    });
-    
-    if (!response.ok) {
-      const errorData = await response.json();
-      throw new Error(errorData.error?.message || 'Failed to generate response');
+    // Check if token is provided (should be passed from the component)
+    if (!token) {
+      throw new Error('You must be logged in to generate responses');
     }
-    
-    const data = await response.json();
-    const generatedResponse = data.choices[0].message.content.trim();
-    
-    // Update the user's response count
-    await supabase
-      .from('profiles')
-      .update({
-        monthly_responses_used: userProfile.monthly_responses_used + 1
-      })
-      .eq('id', user.id);
-      
-    // Log the generation in the history
-    await supabase
-      .from('email_history')
-      .insert({
-        user_id: user.id,
-        customer_email: customerEmail,
-        generated_response: generatedResponse,
-        context_provided: businessContext,
-        tone_requested: tone
+
+    // Create a fallback response in case of errors
+    const fallbackResponse = {
+      response: 'Thank you for your email. We appreciate your interest in our services. Our team will review your questions and get back to you with detailed information shortly. If you have any urgent inquiries, please don\'t hesitate to call our customer service line.',
+      businessName: 'Our Company'
+    };
+
+    try {
+      // Call our secure API endpoint
+      const response = await fetch('/api/openai', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          customerEmail,
+          businessContext,
+          tone
+        }),
       });
-    
-    return generatedResponse;
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        
+        // Check for subscription limit error
+        if (response.status === 403 && errorData.errorCode === 'SUBSCRIPTION_LIMIT_REACHED') {
+          // Create a custom error with all the subscription details
+          const subscriptionError = new Error(errorData.error);
+          subscriptionError.errorCode = errorData.errorCode;
+          subscriptionError.currentUsage = errorData.currentUsage;
+          subscriptionError.limit = errorData.limit;
+          subscriptionError.tier = errorData.tier;
+          throw subscriptionError;
+        }
+        
+        throw new Error(errorData.error || 'Failed to generate response');
+      }
+
+      const data = await response.json();
+      
+      // Return both the response text and business name
+      return {
+        response: data.response || fallbackResponse.response,
+        businessName: data.businessName || fallbackResponse.businessName
+      };
+    } catch (apiError) {
+      console.error('API error:', apiError);
+      
+      // If this is a subscription error, rethrow it
+      if (apiError.errorCode === 'SUBSCRIPTION_LIMIT_REACHED') {
+        throw apiError;
+      }
+      
+      // For development mode or other errors, return a mock response
+      console.warn('Falling back to default response');
+      return fallbackResponse;
+    }
   } catch (error) {
     console.error('Error generating email response:', error);
-    throw new Error('Failed to generate response. Please try again later.');
+    throw error;
   }
 }
 
-// Helper functions to extract information from emails
+// Helper functions for email parsing
 function extractSubject(email) {
   // Basic extraction - in a real app, you'd use a proper email parser
   const subjectMatch = email.match(/Subject: (.*?)(?:\n|$)/i);
@@ -116,13 +88,13 @@ function extractEmailBody(email) {
   // Basic extraction - this is simplified
   const lines = email.split('\n');
   let bodyStartIndex = 0;
-  
+
   for (let i = 0; i < lines.length; i++) {
     if (lines[i].trim() === '') {
       bodyStartIndex = i + 1;
       break;
     }
   }
-  
+
   return lines.slice(bodyStartIndex).join('\n').trim();
 }

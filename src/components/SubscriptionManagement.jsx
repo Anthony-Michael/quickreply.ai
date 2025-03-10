@@ -1,22 +1,13 @@
 import React, { useState, useEffect } from 'react';
-import { supabase } from '../lib/supabase';
+import { useUser, useSupabaseClient } from '@supabase/auth-helpers-react';
+import { loadStripe } from '@stripe/stripe-js';
 
-// Mock Stripe implementation
-const mockStripe = {
-  redirectToCheckout: async ({ sessionId }) => {
-    console.log('Mock redirecting to Stripe checkout with session ID:', sessionId);
-    alert('In production, this would redirect to Stripe checkout.');
-    return { error: null };
-  }
-};
-
-// Mock loadStripe function
-const loadStripe = () => Promise.resolve(mockStripe);
-
-// Initialize Stripe (this would use the actual Stripe in production)
-const stripePromise = loadStripe();
+// Initialize Stripe with the publishable key
+const stripePromise = loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY);
 
 const SubscriptionManagement = () => {
+  const user = useUser();
+  const supabase = useSupabaseClient();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [userProfile, setUserProfile] = useState(null);
@@ -29,108 +20,134 @@ const SubscriptionManagement = () => {
     free: {
       name: 'Free',
       price: 0,
-      responseLimit: 25,
-      features: [
-        'Basic email templates',
-        '7-day email history',
-        'Single user account'
-      ]
+      responses: 25,
+      features: ['Basic email responses', 'Standard response time', 'Web access only']
+    },
+    pro: {
+      name: 'Pro',
+      price: 9.99,
+      responses: 100,
+      features: ['Advanced email responses', 'Faster response time', 'Priority support', 'Mobile access']
     },
     business: {
       name: 'Business',
-      price: 29,
-      responseLimit: 250,
-      features: [
-        'Advanced templates with customization',
-        'Unlimited email history',
-        'Priority response generation',
-        'Basic analytics'
-      ]
+      price: 29.99,
+      responses: 500,
+      features: ['Enterprise-grade responses', 'Instant response time', 'Dedicated support', 'Team management', 'Custom branding']
     },
-    premium: {
-      name: 'Premium',
-      price: 79,
-      responseLimit: 1000,
-      features: [
-        'Team accounts (up to 3 users)',
-        'Advanced analytics',
-        'API access for integration',
-        'Priority support'
-      ]
-    }
   };
 
   useEffect(() => {
-    async function loadSubscriptionData() {
+    // Only load subscription data when user is available
+    if (user) {
+      loadSubscriptionData();
+    }
+  }, [user]); // Add user to dependency array
+
+  async function loadSubscriptionData() {
+    if (!user) {
+      setLoading(false);
+      setError('Not authenticated');
+      return;
+    }
+
+    try {
+      setLoading(true);
+      setError('');
+
+      // Default profile to use if database fetch fails
+      const defaultProfile = {
+        id: user.id,
+        subscription_tier: 'free',
+        monthly_responses_limit: 25,
+        monthly_responses_used: 0,
+        subscription_end_date: null
+      };
+
+      let profile = defaultProfile;
+
       try {
-        setLoading(true);
-        
-        // Get the current user
-        const { data: { user } } = await supabase.auth.getUser();
-        
-        if (!user) {
-          throw new Error('Not authenticated');
-        }
-        
         // Load user profile
-        const { data: profile, error: profileError } = await supabase
+        const { data: profileData, error: profileError } = await supabase
           .from('profiles')
           .select('*')
           .eq('id', user.id)
           .single();
-          
-        if (profileError) throw profileError;
-        setUserProfile(profile);
-        
-        // Set current plan
-        setCurrentPlan(profile.subscription_tier);
-        
-        // Set subscription end date if available
-        if (profile.subscription_end_date) {
-          setSubscriptionEnd(new Date(profile.subscription_end_date));
-        }
-      } catch (err) {
-        console.error('Error loading subscription data:', err);
-        setError('Failed to load subscription data. Please try refreshing the page.');
-      } finally {
-        setLoading(false);
-      }
-    }
-    
-    loadSubscriptionData();
-  }, []);
 
-  const handleUpgradeSubscription = async (planTier) => {
+        if (profileError) {
+          console.error('Error fetching profile:', profileError);
+          // Continue with default profile
+        } else if (profileData) {
+          profile = profileData;
+        }
+      } catch (profileFetchError) {
+        console.error('Profile fetch error:', profileFetchError);
+        // Continue with default profile
+      }
+
+      // Set the current plan and other state
+      setUserProfile(profile);
+      setCurrentPlan(profile.subscription_tier || 'free');
+      setSubscriptionEnd(profile.subscription_end_date);
+      
+      // If table doesn't exist yet, try to create the profile
+      try {
+        if (!profile.id) {
+          const { error: insertError } = await supabase
+            .from('profiles')
+            .upsert([defaultProfile]);
+            
+          if (insertError) {
+            console.warn('Could not create profile:', insertError);
+          }
+        }
+      } catch (createError) {
+        console.warn('Error creating profile:', createError);
+      }
+      
+      // Load usage statistics or other data you might need
+      
+    } catch (error) {
+      console.error('Error loading subscription data:', error);
+      setError('Failed to load subscription data. Please try again later.');
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  const handleUpgradeSubscription = async planTier => {
     if (planTier === currentPlan) {
       return; // Already on this plan
     }
-    
+
     try {
       setProcessingUpgrade(true);
-      
-      // Call your serverless function to create a Stripe checkout session
+      setError('');
+
+      // Call our API to create a Stripe checkout session
       const response = await fetch('/api/create-checkout-session', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('supabase.auth.token')}` // Add auth token
         },
         body: JSON.stringify({
           planTier,
-          returnUrl: window.location.origin + '/account'
+          returnUrl: window.location.origin + '/subscription-management',
         }),
       });
-      
+
       if (!response.ok) {
         const errorData = await response.json();
-        throw new Error(errorData.message || 'Failed to create checkout session');
+        throw new Error(errorData.error || 'Failed to create checkout session');
       }
-      
+
       const { sessionId } = await response.json();
-      
+
       // Redirect to Stripe checkout
       const stripe = await stripePromise;
       const { error } = await stripe.redirectToCheckout({ sessionId });
-      
+
       if (error) {
         throw error;
       }
@@ -142,151 +159,156 @@ const SubscriptionManagement = () => {
     }
   };
 
-  const formatDate = (date) => {
+  const formatDate = date => {
     if (!date) return 'N/A';
-    
+
     const options = { year: 'numeric', month: 'long', day: 'numeric' };
     return date.toLocaleDateString(undefined, options);
   };
 
   if (loading) {
-    return <div className="p-8 text-center">Loading subscription data...</div>;
+    return (
+      <div className="flex justify-center items-center p-8">
+        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500"></div>
+      </div>
+    );
   }
 
   if (error) {
-    return <div className="p-8 text-center text-red-600">{error}</div>;
+    return (
+      <div className="p-8 text-center text-red-600">
+        {error}
+      </div>
+    );
   }
 
   return (
-    <div className="max-w-4xl mx-auto p-4">
-      <h1 className="text-2xl font-bold mb-6">Subscription Management</h1>
-      
-      {/* Current Plan Summary */}
-      <div className="bg-white p-6 rounded-lg shadow mb-8">
-        <h2 className="text-xl font-semibold mb-4">Current Plan</h2>
+    <div className="max-w-6xl mx-auto p-6">
+      <h1 className="text-3xl font-bold mb-8">Subscription Management</h1>
+
+      <div className="bg-white shadow-md rounded-lg p-6 mb-8">
+        <h2 className="text-2xl font-semibold mb-4">Current Plan</h2>
         
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div className="flex flex-col md:flex-row md:items-center justify-between">
           <div>
-            <p className="text-gray-600 mb-2">Plan Tier</p>
-            <p className="text-xl font-medium">{planDetails[currentPlan]?.name || 'Free'}</p>
-          </div>
-          
-          <div>
-            <p className="text-gray-600 mb-2">Monthly Response Limit</p>
-            <p className="text-xl font-medium">{planDetails[currentPlan]?.responseLimit || 25}</p>
-          </div>
-          
-          <div>
-            <p className="text-gray-600 mb-2">Used This Month</p>
-            <p className="text-xl font-medium">{userProfile?.monthly_responses_used || 0}</p>
-          </div>
-          
-          <div>
-            <p className="text-gray-600 mb-2">Remaining</p>
-            <p className="text-xl font-medium">
-              {(planDetails[currentPlan]?.responseLimit || 25) - (userProfile?.monthly_responses_used || 0)}
+            <p className="text-xl font-bold text-blue-600">
+              {planDetails[currentPlan]?.name || 'Free'} Plan
             </p>
+            <p className="text-gray-600 mt-1">
+              {planDetails[currentPlan]?.responses || 0} responses per month
+            </p>
+            {subscriptionEnd && currentPlan !== 'free' && (
+              <p className="text-sm text-gray-500 mt-2">
+                Renews on {formatDate(subscriptionEnd)}
+              </p>
+            )}
           </div>
           
-          {subscriptionEnd && currentPlan !== 'free' && (
-            <div className="col-span-1 md:col-span-2">
-              <p className="text-gray-600 mb-2">Subscription Renews</p>
-              <p className="text-xl font-medium">{formatDate(subscriptionEnd)}</p>
+          <div className="mt-4 md:mt-0">
+            <div className="p-4 bg-gray-50 rounded-lg">
+              <h3 className="font-semibold text-gray-800">Usage</h3>
+              <p className="text-2xl font-bold">
+                {userProfile?.monthly_responses_used || 0}/
+                {userProfile?.monthly_responses_limit || 0}
+              </p>
+              <p className="text-sm text-gray-600">responses used</p>
             </div>
-          )}
+          </div>
         </div>
       </div>
-      
-      {/* Plan Options */}
-      <h2 className="text-xl font-semibold mb-4">Available Plans</h2>
-      
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-        {Object.entries(planDetails).map(([tier, plan]) => (
-          <div 
-            key={tier}
-            className={`bg-white p-6 rounded-lg shadow ${
-              currentPlan === tier ? 'border-2 border-blue-500' : ''
-            }`}
-          >
-            <div className="text-center mb-6">
-              <h3 className="text-lg font-semibold">{plan.name}</h3>
-              <p className="text-3xl font-bold mt-2">
-                ${plan.price}
-                <span className="text-sm text-gray-500">/month</span>
-              </p>
-              <p className="text-sm text-gray-500 mt-1">
-                {plan.responseLimit} responses per month
-              </p>
-            </div>
-            
-            <ul className="mb-6 space-y-2">
-              {plan.features.map((feature, index) => (
-                <li key={index} className="flex items-start">
-                  <svg 
-                    className="h-5 w-5 text-green-500 mr-2" 
-                    fill="none" 
-                    viewBox="0 0 24 24" 
-                    stroke="currentColor"
-                  >
-                    <path 
-                      strokeLinecap="round" 
-                      strokeLinejoin="round" 
-                      strokeWidth={2} 
-                      d="M5 13l4 4L19 7" 
-                    />
-                  </svg>
-                  <span className="text-gray-700">{feature}</span>
-                </li>
-              ))}
-            </ul>
-            
-            <button
-              onClick={() => handleUpgradeSubscription(tier)}
-              disabled={processingUpgrade || currentPlan === tier}
-              className={`w-full py-2 px-4 rounded-md ${
-                currentPlan === tier
-                  ? 'bg-green-500 text-white'
-                  : 'bg-blue-600 text-white hover:bg-blue-700'
-              } font-medium focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50`}
-            >
-              {currentPlan === tier
-                ? 'Current Plan'
-                : `Upgrade to ${plan.name}`}
-            </button>
-          </div>
-        ))}
-      </div>
-      
-      {/* FAQ Section */}
-      <div className="bg-white p-6 rounded-lg shadow">
-        <h2 className="text-xl font-semibold mb-4">Frequently Asked Questions</h2>
+
+      <div className="mb-12">
+        <h2 className="text-2xl font-semibold mb-6">Available Plans</h2>
         
-        <div className="space-y-4">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          {Object.entries(planDetails).map(([tier, plan]) => (
+            <div key={tier} className="bg-white shadow-md rounded-lg overflow-hidden">
+              <div className={`p-6 ${currentPlan === tier ? 'bg-blue-50' : ''}`}>
+                <h3 className="text-xl font-bold">{plan.name}</h3>
+                <p className="text-3xl font-bold mt-2">
+                  ${plan.price}
+                  <span className="text-sm font-normal text-gray-600">/month</span>
+                </p>
+                <p className="mt-2 text-gray-600">{plan.responses} responses per month</p>
+                
+                <ul className="mt-4 space-y-2">
+                  {plan.features.map((feature, index) => (
+                    <li key={index} className="flex items-start">
+                      <svg
+                        className="h-5 w-5 text-green-500 mr-2 mt-0.5"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth="2"
+                          d="M5 13l4 4L19 7"
+                        />
+                      </svg>
+                      {feature}
+                    </li>
+                  ))}
+                </ul>
+                
+                <div className="mt-6">
+                  {currentPlan === tier ? (
+                    <button
+                      className="w-full py-2 px-4 bg-gray-300 text-gray-700 rounded-md"
+                      disabled
+                    >
+                      Current Plan
+                    </button>
+                  ) : tier === 'free' ? (
+                    <button
+                      className="w-full py-2 px-4 bg-red-500 text-white rounded-md hover:bg-red-600"
+                      onClick={() => handleUpgradeSubscription(tier)}
+                      disabled={processingUpgrade}
+                    >
+                      Downgrade
+                    </button>
+                  ) : (
+                    <button
+                      className="w-full py-2 px-4 bg-blue-600 text-white rounded-md hover:bg-blue-700"
+                      onClick={() => handleUpgradeSubscription(tier)}
+                      disabled={processingUpgrade}
+                    >
+                      {processingUpgrade ? 'Processing...' : 'Upgrade'}
+                    </button>
+                  )}
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div className="bg-white shadow-md rounded-lg p-6">
+        <h2 className="text-2xl font-semibold mb-4">Frequently Asked Questions</h2>
+        
+        <div className="space-y-6">
           <div>
-            <h3 className="font-medium text-lg">When will my subscription renew?</h3>
-            <p className="text-gray-600">
-              Your subscription will automatically renew on {formatDate(subscriptionEnd)} unless you cancel before that date.
+            <h3 className="text-lg font-semibold">How do I upgrade my plan?</h3>
+            <p className="mt-1 text-gray-600">
+              Simply click the "Upgrade" button on the plan you wish to subscribe to. You'll be redirected to our secure payment
+              provider to complete your purchase.
             </p>
           </div>
           
           <div>
-            <h3 className="font-medium text-lg">How do I cancel my subscription?</h3>
-            <p className="text-gray-600">
-              To cancel your subscription, please contact our support team at support@aiemail-responder.com.
+            <h3 className="text-lg font-semibold">What happens if I reach my monthly limit?</h3>
+            <p className="mt-1 text-gray-600">
+              Once you reach your monthly response limit, you won't be able to generate new responses until your plan renews or
+              you upgrade to a higher tier.
             </p>
           </div>
           
           <div>
-            <h3 className="font-medium text-lg">What happens if I reach my monthly limit?</h3>
-            <p className="text-gray-600">
-              Once you reach your monthly response limit, you'll need to upgrade to a higher tier or wait until your next billing cycle to generate more responses.
-            </p>
-          </div>
-          
-          <div>
-            <h3 className="font-medium text-lg">Can I change plans in the middle of a billing cycle?</h3>
-            <p className="text-gray-600">
-              Yes, you can upgrade at any time. If you upgrade, you'll be charged the prorated difference for the remainder of your billing cycle.
+            <h3 className="text-lg font-semibold">How do I cancel my subscription?</h3>
+            <p className="mt-1 text-gray-600">
+              You can cancel your subscription at any time by contacting our support team. Your plan will remain active until the
+              end of your billing period.
             </p>
           </div>
         </div>

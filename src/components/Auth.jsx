@@ -1,215 +1,174 @@
 // src/components/Auth.jsx
-import React, { useState } from 'react';
-import { supabase } from '../lib/supabase';
+import React, { useState, useEffect } from 'react';
+import { useRouter } from 'next/router';
+import { useSupabaseClient } from '@supabase/auth-helpers-react';
 
-const Auth = () => {
-  const [loading, setLoading] = useState(false);
+const Auth = ({ isSignup = false }) => {
+  const router = useRouter();
+  const supabaseClient = useSupabaseClient();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [view, setView] = useState('sign-in'); // 'sign-in', 'sign-up', 'forgot-password'
+  const [loading, setLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
   const [successMessage, setSuccessMessage] = useState('');
+  const [devMode] = useState(process.env.NEXT_PUBLIC_DEV_MODE === 'true');
 
-  const handleSignIn = async e => {
+  // In development mode, handle direct navigation to dashboard
+  useEffect(() => {
+    if (devMode) {
+      const devModeRedirect = () => {
+        console.log('Development mode: redirecting to dashboard...');
+        // Use direct window.location for more reliable navigation in development mode
+        window.localStorage.setItem('quickreply_dev_auth', 'true');
+        window.location.href = '/';
+      };
+      
+      // Add button to bypass auth in dev mode
+      const addDevButton = document.createElement('button');
+      addDevButton.textContent = 'Development Mode: Skip Login';
+      addDevButton.className = 'mt-4 w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500';
+      addDevButton.onclick = devModeRedirect;
+      
+      // Get the form element and append the button
+      const form = document.querySelector('form');
+      if (form && !document.querySelector('.dev-mode-button')) {
+        addDevButton.classList.add('dev-mode-button');
+        form.parentNode.insertBefore(addDevButton, form.nextSibling);
+      }
+    }
+  }, [devMode, router]);
+
+  const handleAuth = async (e) => {
     e.preventDefault();
     setLoading(true);
     setErrorMessage('');
     setSuccessMessage('');
 
-    console.log('Attempting to sign in with:', { email });
-
     try {
-      console.log('Calling Supabase auth.signInWithPassword...');
-      const { data, error } = await supabase.auth.signInWithPassword({
-        email,
-        password,
-      });
-
-      console.log('Sign-in response:', { data, error });
-
-      if (error) {
-        throw error;
-      }
-
-      if (data?.user) {
-        console.log('Sign-in successful for user:', data.user);
-        setSuccessMessage('Sign-in successful! Redirecting...');
-        // Manually redirect since automatic redirect might not be working
+      if (devMode) {
+        // In development mode, just redirect to dashboard using direct location change
+        console.log('Development mode active - bypassing authentication');
+        setSuccessMessage('Development mode: logging in automatically...');
+        
+        // Set a dev auth flag in localStorage to simulate being logged in
+        window.localStorage.setItem('quickreply_dev_auth', 'true');
+        
+        // Use direct location change instead of router for more reliable navigation
         setTimeout(() => {
-          window.location.href = '/dashboard';
+          window.location.href = '/';
         }, 1000);
+        
+        return;
+      }
+
+      if (isSignup) {
+        // Sign up
+        const { error } = await supabaseClient.auth.signUp({
+          email,
+          password,
+        });
+        if (error) throw error;
+        setSuccessMessage('Account created! Check your email for confirmation.');
+      } else {
+        // Sign in
+        const { error } = await supabaseClient.auth.signInWithPassword({
+          email,
+          password,
+        });
+        if (error) throw error;
+        router.push('/');
       }
     } catch (error) {
-      console.error('Sign-in error:', error);
-      setErrorMessage(error.message || 'Failed to sign in');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleSignUp = async e => {
-    e.preventDefault();
-    setLoading(true);
-    setErrorMessage('');
-    setSuccessMessage('');
-
-    try {
-      const { error } = await supabase.auth.signUp({
-        email,
-        password,
-      });
-
-      if (error) throw error;
-      setSuccessMessage('Check your email for the confirmation link!');
-    } catch (error) {
-      console.error('Sign-up error:', error);
-      setErrorMessage(error.message || 'Failed to sign up');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handlePasswordReset = async e => {
-    e.preventDefault();
-    setLoading(true);
-
-    try {
-      const { error } = await supabase.auth.resetPasswordForEmail(email);
-      if (error) throw error;
-      alert('Check your email for the password reset link!');
-    } catch (error) {
-      alert(error.message);
+      setErrorMessage(error.message || 'An error occurred during authentication');
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div className="w-full max-w-md p-8 space-y-8 bg-white rounded-lg shadow-md">
-      <div className="text-center">
-        <h1 className="text-2xl font-bold">AI Email Responder</h1>
-        <p className="mt-2 text-gray-600">
-          {view === 'sign-in'
-            ? 'Sign in to your account'
-            : view === 'sign-up'
-              ? 'Create a new account'
-              : 'Reset your password'}
-        </p>
-      </div>
+    <div className="max-w-md mx-auto bg-white rounded-lg shadow-md overflow-hidden md:max-w-md">
+      <div className="px-6 py-8">
+        <h2 className="text-center text-3xl font-extrabold text-gray-900">
+          {isSignup ? 'Create your account' : 'Sign in to your account'}
+        </h2>
+        
+        {devMode && (
+          <div className="mt-4 bg-yellow-100 border-l-4 border-yellow-500 text-yellow-700 p-4" role="alert">
+            <p className="font-bold">Development Mode</p>
+            <p>Authentication is simulated. Enter any credentials or use the button below.</p>
+          </div>
+        )}
+        
+        <form className="mt-8 space-y-6" onSubmit={handleAuth}>
+          <div className="rounded-md shadow-sm -space-y-px">
+            <div>
+              <label htmlFor="email-address" className="sr-only">
+                Email address
+              </label>
+              <input
+                id="email-address"
+                name="email"
+                type="email"
+                autoComplete="email"
+                required
+                className="appearance-none rounded-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-t-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 focus:z-10 sm:text-sm"
+                placeholder="Email address"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+              />
+            </div>
+            <div>
+              <label htmlFor="password" className="sr-only">
+                Password
+              </label>
+              <input
+                id="password"
+                name="password"
+                type="password"
+                autoComplete="current-password"
+                required
+                className="appearance-none rounded-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-b-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 focus:z-10 sm:text-sm"
+                placeholder="Password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+              />
+            </div>
+          </div>
 
-      {errorMessage && (
-        <div className="p-3 text-sm text-red-700 bg-red-100 border border-red-300 rounded">
-          {errorMessage}
-        </div>
-      )}
-
-      {successMessage && (
-        <div className="p-3 text-sm text-green-700 bg-green-100 border border-green-300 rounded">
-          {successMessage}
-        </div>
-      )}
-
-      <form className="mt-8 space-y-6">
-        <div>
-          <label htmlFor="email" className="block text-sm font-medium text-gray-700">
-            Email address
-          </label>
-          <input
-            id="email"
-            name="email"
-            type="email"
-            required
-            value={email}
-            onChange={e => setEmail(e.target.value)}
-            className="block w-full px-3 py-2 mt-1 border border-gray-300 rounded-md shadow-sm"
-            placeholder="you@example.com"
-          />
-        </div>
-
-        {(view === 'sign-in' || view === 'sign-up') && (
           <div>
-            <label htmlFor="password" className="block text-sm font-medium text-gray-700">
-              Password
-            </label>
-            <input
-              id="password"
-              name="password"
-              type="password"
-              required
-              value={password}
-              onChange={e => setPassword(e.target.value)}
-              className="block w-full px-3 py-2 mt-1 border border-gray-300 rounded-md shadow-sm"
-              placeholder="••••••••"
-            />
+            <button
+              type="submit"
+              disabled={loading}
+              className="group relative w-full flex justify-center py-2 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50"
+            >
+              {loading ? 'Processing...' : isSignup ? 'Sign up' : 'Sign in'}
+            </button>
+          </div>
+        </form>
+
+        {errorMessage && (
+          <div className="mt-4 text-center text-sm text-red-600">
+            {errorMessage}
           </div>
         )}
 
-        <div>
-          {view === 'sign-in' && (
-            <button
-              type="submit"
-              onClick={handleSignIn}
-              disabled={loading}
-              className="w-full px-4 py-2 text-white bg-blue-600 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-            >
-              {loading ? 'Loading...' : 'Sign in'}
-            </button>
-          )}
-
-          {view === 'sign-up' && (
-            <button
-              type="submit"
-              onClick={handleSignUp}
-              disabled={loading}
-              className="w-full px-4 py-2 text-white bg-blue-600 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-            >
-              {loading ? 'Loading...' : 'Sign up'}
-            </button>
-          )}
-
-          {view === 'forgot-password' && (
-            <button
-              type="submit"
-              onClick={handlePasswordReset}
-              disabled={loading}
-              className="w-full px-4 py-2 text-white bg-blue-600 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-            >
-              {loading ? 'Loading...' : 'Send reset instructions'}
-            </button>
-          )}
-        </div>
-      </form>
-
-      <div className="text-center">
-        {view === 'sign-in' ? (
-          <>
-            <button
-              onClick={() => setView('forgot-password')}
-              className="text-sm text-blue-600 hover:text-blue-800"
-            >
-              Forgot your password?
-            </button>
-            <p className="mt-2">
-              Don't have an account?{' '}
-              <button
-                onClick={() => setView('sign-up')}
-                className="text-blue-600 hover:text-blue-800"
-              >
-                Sign up
-              </button>
-            </p>
-          </>
-        ) : (
-          <p>
-            Already have an account?{' '}
-            <button
-              onClick={() => setView('sign-in')}
-              className="text-blue-600 hover:text-blue-800"
-            >
-              Sign in
-            </button>
-          </p>
+        {successMessage && (
+          <div className="mt-4 text-center text-sm text-green-600">
+            {successMessage}
+          </div>
         )}
+
+        <div className="mt-6 text-center text-sm">
+          <span className="text-gray-600">
+            {isSignup ? 'Already have an account?' : "Don't have an account?"}
+          </span>
+          <a
+            href={isSignup ? '/login' : '/signup'}
+            className="ml-1 font-medium text-blue-600 hover:text-blue-500"
+          >
+            {isSignup ? 'Sign in' : 'Sign up'}
+          </a>
+        </div>
       </div>
     </div>
   );
