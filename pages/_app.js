@@ -11,13 +11,18 @@ function MyApp({ Component, pageProps }) {
   
   // Check environment on client-side render
   useEffect(() => {
-    // Check hostname to detect environment
-    const hostname = window.location.hostname;
-    if (hostname.includes('staging') || hostname.includes('preview') || 
-        hostname.includes('test') || hostname.includes('localhost')) {
-      setEnvironment(hostname.includes('staging') ? 'staging' : 
-                    hostname.includes('preview') ? 'preview' : 
-                    hostname.includes('localhost') ? 'local' : 'test');
+    // Use Vercel environment variable if available
+    if (process.env.NEXT_PUBLIC_VERCEL_ENV) {
+      setEnvironment(process.env.NEXT_PUBLIC_VERCEL_ENV);
+    } else {
+      // Fallback to hostname detection
+      const hostname = window.location.hostname;
+      if (hostname.includes('staging') || hostname.includes('preview') || 
+          hostname.includes('test') || hostname.includes('localhost')) {
+        setEnvironment(hostname.includes('staging') ? 'staging' : 
+                      hostname.includes('preview') ? 'preview' : 
+                      hostname.includes('localhost') ? 'development' : 'test');
+      }
     }
   }, []);
 
@@ -144,7 +149,7 @@ function MyApp({ Component, pageProps }) {
           <div className={`sticky top-0 z-50 w-full p-2 text-white text-center text-sm font-medium ${
             environment === 'staging' ? 'bg-purple-600' : 
             environment === 'preview' ? 'bg-blue-600' : 
-            environment === 'test' ? 'bg-orange-600' : 'bg-green-600'
+            environment === 'development' ? 'bg-green-600' : 'bg-orange-600'
           }`}>
             {environment.toUpperCase()} ENVIRONMENT
           </div>
