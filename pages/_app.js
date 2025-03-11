@@ -6,6 +6,21 @@ import { SessionContextProvider } from '@supabase/auth-helpers-react';
 import Navigation from '../src/components/Navigation';
 
 function MyApp({ Component, pageProps }) {
+  // Environment detection
+  const [environment, setEnvironment] = useState('production');
+  
+  // Check environment on client-side render
+  useEffect(() => {
+    // Check hostname to detect environment
+    const hostname = window.location.hostname;
+    if (hostname.includes('staging') || hostname.includes('preview') || 
+        hostname.includes('test') || hostname.includes('localhost')) {
+      setEnvironment(hostname.includes('staging') ? 'staging' : 
+                    hostname.includes('preview') ? 'preview' : 
+                    hostname.includes('localhost') ? 'local' : 'test');
+    }
+  }, []);
+
   // Check for development mode from environment variables or process.env.NODE_ENV
   const isDevelopmentMode = () => {
     if (typeof window !== 'undefined') {
@@ -124,6 +139,16 @@ function MyApp({ Component, pageProps }) {
   return (
     <SessionContextProvider supabaseClient={supabaseClient} initialSession={pageProps.initialSession}>
       <div className="min-h-screen bg-gray-50">
+        {/* Environment Banner - Only shown in non-production environments */}
+        {environment !== 'production' && (
+          <div className={`sticky top-0 z-50 w-full p-2 text-white text-center text-sm font-medium ${
+            environment === 'staging' ? 'bg-purple-600' : 
+            environment === 'preview' ? 'bg-blue-600' : 
+            environment === 'test' ? 'bg-orange-600' : 'bg-green-600'
+          }`}>
+            {environment.toUpperCase()} ENVIRONMENT
+          </div>
+        )}
         {!isMockPage(pageProps.pathname) && <Navigation />}
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
           <Component {...pageProps} />
