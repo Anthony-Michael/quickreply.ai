@@ -4,17 +4,23 @@ import { useRouter } from 'next/router';
 import { useSupabaseClient, useUser } from '@supabase/auth-helpers-react';
 
 const Navigation = () => {
-  const router = useRouter();
-  const user = useUser();
-  const supabaseClient = useSupabaseClient();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [devMode] = useState(process.env.NEXT_PUBLIC_DEV_MODE === 'true');
   const [isClient, setIsClient] = useState(false);
+  const [currentPath, setCurrentPath] = useState('');
+  
+  // Initialize client-side state and get router only on client side
+  const router = typeof window !== 'undefined' ? useRouter() : null;
+  const user = useUser();
+  const supabaseClient = useSupabaseClient();
   
   // Initialize client-side state
   useEffect(() => {
     setIsClient(true);
-  }, []);
+    if (router) {
+      setCurrentPath(router.pathname);
+    }
+  }, [router?.pathname]);
 
   const handleSignOut = async () => {
     if (devMode) {
@@ -26,25 +32,36 @@ const Navigation = () => {
     }
     
     await supabaseClient.auth.signOut();
-    router.push('/login');
+    if (router) {
+      router.push('/login');
+    } else {
+      window.location.href = '/login';
+    }
   };
 
   const isActive = path => {
-    return router.pathname === path ? 'bg-blue-600 text-white' : 'text-white hover:bg-blue-600';
+    return currentPath === path ? 'bg-blue-600 text-white' : 'text-white hover:bg-blue-600';
   };
 
+  // Don't render anything until client-side hydration completes
+  if (!isClient) {
+    return null;
+  }
+
   // Don't show navigation on auth pages
-  if (router.pathname === '/login' || router.pathname === '/signup') {
+  if (currentPath === '/login' || currentPath === '/signup') {
     return null;
   }
 
   // Check for development mode authentication
-  const hasDevAuth = isClient && devMode && localStorage.getItem('quickreply_dev_auth') === 'true';
+  const hasDevAuth = devMode && localStorage.getItem('quickreply_dev_auth') === 'true';
   const isAuthenticated = user || hasDevAuth;
   
   // If not authenticated in any way, don't show the navigation
   if (!isAuthenticated && !devMode) {
-    router.push('/login');
+    if (router) {
+      router.push('/login');
+    }
     return null;
   }
 
