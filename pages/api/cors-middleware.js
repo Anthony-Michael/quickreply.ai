@@ -5,7 +5,7 @@
  */
 export const corsMiddleware = (handler) => async (req, res) => {
     // Set CORS headers
-    res.setHeader('Access-Control-Allow-Origin', 'https://www.rocketreply.io');
+    res.setHeader('Access-Control-Allow-Origin', 'https://www.replyrocket.io');
     res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS, PUT, DELETE');
     res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, x-client-info, apikey');
     
