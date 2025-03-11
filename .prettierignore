@@ -1,0 +1,8 @@
+build
+coverage
+node_modules
+public
+*.min.js
+*.svg
+package-lock.json
+package.json 

@@ -2,8 +2,18 @@ import React, { useState, useEffect } from 'react';
 import { useUser, useSupabaseClient } from '@supabase/auth-helpers-react';
 import { loadStripe } from '@stripe/stripe-js';
 
-// Initialize Stripe with the publishable key
-const stripePromise = loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY);
+// Initialize Stripe with the publishable key - using conditional to handle SSR
+const stripePromise = typeof window !== 'undefined' ? 
+  loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY) : 
+  null;
+
+// Add a debug log to check if the key is available
+if (typeof window !== 'undefined') {
+  console.debug('Stripe key available:', !!process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY);
+  if (!process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY) {
+    console.error('Stripe publishable key is missing. Please check environment variables.');
+  }
+}
 
 const SubscriptionManagement = () => {
   const user = useUser();
@@ -124,12 +134,27 @@ const SubscriptionManagement = () => {
       setProcessingUpgrade(true);
       setError('');
 
+      // Add error handling for missing Stripe configuration
+      if (typeof window !== 'undefined' && !process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY) {
+        console.error('Stripe publishable key is missing');
+        setError('Payment processing is not properly configured. Please contact support.');
+        setProcessingUpgrade(false);
+        return;
+      }
+
+      const session = await supabase.auth.getSession();
+      const accessToken = session?.data?.session?.access_token;
+      
+      if (!accessToken) {
+        throw new Error('Authentication required. Please sign in to continue.');
+      }
+
       // Call our API to create a Stripe checkout session
       const response = await fetch('/api/create-checkout-session', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('supabase.auth.token')}` // Add auth token
+          'Authorization': `Bearer ${accessToken}`
         },
         body: JSON.stringify({
           planTier,
@@ -146,6 +171,11 @@ const SubscriptionManagement = () => {
 
       // Redirect to Stripe checkout
       const stripe = await stripePromise;
+      
+      if (!stripe) {
+        throw new Error('Could not initialize Stripe. Please check your configuration.');
+      }
+      
       const { error } = await stripe.redirectToCheckout({ sessionId });
 
       if (error) {

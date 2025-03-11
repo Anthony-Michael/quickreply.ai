@@ -4,7 +4,15 @@ import { supabaseAdmin } from './utils/supabase-admin';
 import { corsMiddleware } from './cors-middleware';
 
 // Initialize Stripe with the secret key
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
+if (!process.env.STRIPE_SECRET_KEY) {
+  console.error('Missing STRIPE_SECRET_KEY environment variable in webhook handler');
+}
+
+const stripe = process.env.STRIPE_SECRET_KEY 
+  ? new Stripe(process.env.STRIPE_SECRET_KEY, {
+      apiVersion: '2023-10-16', // Using a specific API version for stability
+    }) 
+  : null;
 
 // Disable body parsing, we need the raw body for webhook signature verification
 export const config = {
@@ -45,6 +53,17 @@ const stripeWebhookHandler = async (req, res) => {
   // Only allow POST method
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
+  }
+
+  // Check if Stripe is properly initialized
+  if (!stripe) {
+    console.error('Stripe is not initialized. Check STRIPE_SECRET_KEY environment variable.');
+    return res.status(500).json({ 
+      error: 'Stripe is not properly configured',
+      envStatus: {
+        hasStripeKey: !!process.env.STRIPE_SECRET_KEY
+      }
+    });
   }
 
   try {
