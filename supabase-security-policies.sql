@@ -1,5 +1,5 @@
 -- Supabase Row Level Security Policies
--- This file contains all security policies for the QuickReply.ai application
+-- This file contains all security policies for the ReplyRocket.io application
 
 -- ===============================================
 -- Enable RLS on all tables

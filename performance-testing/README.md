@@ -1,6 +1,6 @@
-# Performance Testing for QuickReply.ai
+# Performance Testing for ReplyRocket.io
 
-This directory contains a comprehensive performance testing framework for the QuickReply.ai application. It's designed to evaluate how the application performs under high traffic conditions and identify potential bottlenecks.
+This directory contains a comprehensive performance testing framework for the ReplyRocket.io application. It's designed to evaluate how the application performs under high traffic conditions and identify potential bottlenecks.
 
 ## Overview
 
@@ -75,7 +75,7 @@ The `api-endpoint-load-test.jmx` test plan tests:
 
 Edit the JMX files or set the following environment variables:
 
-- `BASE_URL` - The application URL (default: https://app.quickreply.ai)
+- `BASE_URL` - The application URL (default: https://app.replyrocket.io)
 - `USERS` - Number of concurrent users (default: 100)
 - `RAMP_UP` - Time in seconds to reach full user load (default: 60)
 - `LOOPS` - Number of iterations per user (default: 10)
@@ -185,4 +185,4 @@ To extend this framework:
 
 ## License
 
-This performance testing framework is licensed under the same license as the QuickReply.ai application. 
+This performance testing framework is licensed under the same license as the ReplyRocket.io application. 

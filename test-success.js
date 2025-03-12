@@ -1,4 +1,4 @@
-console.log('=== QuickReply AI Testing Setup ===');
+console.log('=== ReplyRocket.io Testing Setup ===');
 console.log('✅ 1. Fixed Supabase Mock Implementation:');
 console.log('   - Added proper mocking for getUser and other Supabase methods');
 console.log('   - Created more sophisticated chainable mock functions');

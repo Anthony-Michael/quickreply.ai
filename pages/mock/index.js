@@ -8,7 +8,7 @@ const MockNavigation = () => (
       <div className="flex items-center justify-between h-6">
         <div className="flex items-center">
           <Link href="/mock" className="flex-shrink-0 font-bold text-xs">
-            QuickReply.ai
+            ReplyRocket.io
           </Link>
           <div className="hidden md:block">
             <div className="ml-2 flex items-center space-x-0.5">

@@ -1,12 +1,12 @@
 #!/bin/bash
 
-# Setup script for QuickReply.ai performance testing environment
+# Setup script for ReplyRocket.io performance testing environment
 
 # Exit on error
 set -e
 
 echo "=================================================="
-echo "   QuickReply.ai Performance Testing Setup"
+echo "   ReplyRocket.io Performance Testing Setup"
 echo "=================================================="
 echo ""
 

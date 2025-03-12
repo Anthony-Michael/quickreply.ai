@@ -1,6 +1,6 @@
-# Testing in QuickReply AI
+# Testing in ReplyRocket.io
 
-This document outlines the testing setup and practices for the QuickReply AI application.
+This document outlines the testing setup and practices for the ReplyRocket.io application.
 
 ## Testing Stack
 

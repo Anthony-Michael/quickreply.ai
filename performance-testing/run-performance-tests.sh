@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Run performance tests for QuickReply.ai
+# Run performance tests for ReplyRocket.io
 # This script runs JMeter tests and collects system metrics
 
 # Exit on error
@@ -17,7 +17,7 @@ mkdir -p ${TEST_RESULTS_DIR}
 
 # Display banner
 echo "=================================================="
-echo "   QuickReply.ai Performance Testing Suite"
+echo "   ReplyRocket.io Performance Testing Suite"
 echo "=================================================="
 echo "Date: $(date)"
 echo "Results will be saved to: ${TEST_RESULTS_DIR}"
@@ -128,7 +128,7 @@ cat > "${TEST_RESULTS_DIR}/index.html" << EOF
 <!DOCTYPE html>
 <html>
 <head>
-    <title>QuickReply.ai Performance Test Results</title>
+    <title>ReplyRocket.io Performance Test Results</title>
     <style>
         body { font-family: Arial, sans-serif; margin: 0; padding: 20px; color: #333; }
         h1 { color: #0066cc; }
@@ -142,7 +142,7 @@ cat > "${TEST_RESULTS_DIR}/index.html" << EOF
     </style>
 </head>
 <body>
-    <h1>QuickReply.ai Performance Test Results</h1>
+    <h1>ReplyRocket.io Performance Test Results</h1>
     <p>Date: $(date)</p>
     
     <div id="summary" class="test-section">
