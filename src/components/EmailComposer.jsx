@@ -3,15 +3,19 @@ import { useUser, useSupabaseClient } from '@supabase/auth-helpers-react';
 import { generateEmailResponse } from '../lib/openai';
 import Link from 'next/link';
 import useEmailResponse from '../hooks/useEmailResponse';
+import useKeyboardShortcuts from '../hooks/useKeyboardShortcuts';
+import KeyboardShortcutsHelp from './KeyboardShortcutsHelp';
 
 // New component for the email input form
-const EmailForm = ({ customerEmail, setCustomerEmail, businessContext, setBusinessContext, tone, setTone, autoGenerate, setAutoGenerate, handleGenerate }) => {
+const EmailForm = ({ customerEmail, setCustomerEmail, businessContext, setBusinessContext, tone, setTone, autoGenerate, setAutoGenerate, handleGenerate, isGenerating }) => {
   return (
-    <div>
+    <div role="form" aria-labelledby="email-form-title">
+      <h2 id="email-form-title" className="sr-only">Email Response Generator</h2>
       {/* Email input */}
       <div className="mb-4">
         <label htmlFor="customerEmail" className="block text-sm font-medium text-gray-700">
-          Customer Email
+          Customer Email <span className="text-red-500" aria-hidden="true">*</span>
+          <span className="sr-only">(required)</span>
         </label>
         <textarea
           id="customerEmail"
@@ -20,7 +24,12 @@ const EmailForm = ({ customerEmail, setCustomerEmail, businessContext, setBusine
           className="shadow-sm focus:ring-blue-500 focus:border-blue-500 block w-full sm:text-sm border-gray-300 rounded-md"
           value={customerEmail}
           onChange={(e) => setCustomerEmail(e.target.value)}
+          aria-required="true"
+          aria-describedby="customerEmail-desc"
         />
+        <div id="customerEmail-desc" className="mt-1 text-sm text-gray-500">
+          Paste the customer's email that you want to respond to
+        </div>
       </div>
 
       {/* Business context input */}
@@ -35,7 +44,11 @@ const EmailForm = ({ customerEmail, setCustomerEmail, businessContext, setBusine
           className="shadow-sm focus:ring-blue-500 focus:border-blue-500 block w-full sm:text-sm border-gray-300 rounded-md"
           value={businessContext}
           onChange={(e) => setBusinessContext(e.target.value)}
+          aria-describedby="businessContext-desc"
         />
+        <div id="businessContext-desc" className="mt-1 text-sm text-gray-500">
+          Additional context about your business or the specific situation
+        </div>
       </div>
 
       {/* Tone selector */}
@@ -49,12 +62,16 @@ const EmailForm = ({ customerEmail, setCustomerEmail, businessContext, setBusine
           className="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm rounded-md"
           value={tone}
           onChange={(e) => setTone(e.target.value)}
+          aria-describedby="tone-desc"
         >
           <option value="professional">Professional</option>
           <option value="friendly">Friendly</option>
           <option value="empathetic">Empathetic</option>
           <option value="humorous">Humorous</option>
         </select>
+        <div id="tone-desc" className="mt-1 text-sm text-gray-500">
+          Select the tone for your response
+        </div>
       </div>
 
       {/* Auto-generate toggle */}
@@ -66,10 +83,14 @@ const EmailForm = ({ customerEmail, setCustomerEmail, businessContext, setBusine
           className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
           checked={autoGenerate}
           onChange={(e) => setAutoGenerate(e.target.checked)}
+          aria-describedby="autoGenerate-desc"
         />
         <label htmlFor="autoGenerate" className="ml-2 block text-sm text-gray-900">
           Auto-generate response
         </label>
+        <div id="autoGenerate-desc" className="sr-only">
+          When enabled, responses will be generated automatically as you type
+        </div>
       </div>
 
       {/* Generate button */}
@@ -77,23 +98,41 @@ const EmailForm = ({ customerEmail, setCustomerEmail, businessContext, setBusine
         type="button"
         className="inline-flex items-center px-4 py-2 border border-transparent text-base font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
         onClick={handleGenerate}
+        disabled={isGenerating}
+        aria-busy={isGenerating}
       >
-        Generate Response
+        {isGenerating ? (
+          <>
+            <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+            </svg>
+            Generating...
+          </>
+        ) : (
+          'Generate Response'
+        )}
       </button>
     </div>
   );
 };
 
 // New component for displaying the generated response
-const ResponseViewer = ({ generatedResponse, editedResponse, setEditedResponse, responseTextareaRef, handleSave }) => {
+const ResponseViewer = ({ generatedResponse, editedResponse, setEditedResponse, responseTextareaRef, handleSave, handleCopy, isLoading }) => {
   return (
-    <div>
+    <div role="region" aria-label="Generated Response" className="mt-8">
       {/* Generated response */}
       <div className="mb-4">
         <label htmlFor="generatedResponse" className="block text-sm font-medium text-gray-700">
           Generated Response
         </label>
-        <div className="mt-1 p-3 bg-gray-100 rounded-md">
+        <div 
+          className="mt-1 p-3 bg-gray-100 rounded-md" 
+          id="generatedResponse"
+          tabIndex="0"
+          aria-readonly="true"
+          role="textbox"
+        >
           <p>{generatedResponse}</p>
         </div>
       </div>
@@ -111,17 +150,34 @@ const ResponseViewer = ({ generatedResponse, editedResponse, setEditedResponse, 
           className="shadow-sm focus:ring-blue-500 focus:border-blue-500 block w-full sm:text-sm border-gray-300 rounded-md"
           value={editedResponse}
           onChange={(e) => setEditedResponse(e.target.value)}
+          aria-describedby="editedResponse-desc"
         />
+        <div id="editedResponse-desc" className="mt-1 text-sm text-gray-500">
+          You can edit the response before saving or copying
+        </div>
       </div>
 
-      {/* Save button */}
-      <button
-        type="button"
-        className="inline-flex items-center px-4 py-2 border border-transparent text-base font-medium rounded-md shadow-sm text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500"
-        onClick={handleSave}
-      >
-        Save Response
-      </button>
+      {/* Action buttons */}
+      <div className="flex space-x-4">
+        {/* Save button */}
+        <button
+          type="button"
+          className="inline-flex items-center px-4 py-2 border border-transparent text-base font-medium rounded-md shadow-sm text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500"
+          onClick={handleSave}
+          disabled={isLoading}
+        >
+          Save Response
+        </button>
+        
+        {/* Copy button */}
+        <button
+          type="button"
+          className="inline-flex items-center px-4 py-2 border border-gray-300 text-base font-medium rounded-md shadow-sm text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+          onClick={handleCopy}
+        >
+          Copy to Clipboard
+        </button>
+      </div>
     </div>
   );
 };
@@ -131,7 +187,12 @@ const OnboardingTutorial = ({ showOnboarding, onboardingStep, nextOnboardingStep
   if (!showOnboarding) return null;
 
   return (
-    <div className="fixed z-10 inset-0 overflow-y-auto">
+    <div 
+      className="fixed z-10 inset-0 overflow-y-auto" 
+      role="dialog"
+      aria-labelledby="tutorial-heading"
+      aria-modal="true"
+    >
       <div className="flex items-end justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
         {/* Background overlay */}
         <div className="fixed inset-0 transition-opacity" aria-hidden="true">
@@ -139,10 +200,10 @@ const OnboardingTutorial = ({ showOnboarding, onboardingStep, nextOnboardingStep
         </div>
 
         {/* Onboarding content */}
-        <div className="inline-block align-bottom bg-white rounded-lg px-4 pt-5 pb-4 text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full sm:p-6" role="dialog" aria-modal="true" aria-labelledby="modal-headline">
+        <div className="inline-block align-bottom bg-white rounded-lg px-4 pt-5 pb-4 text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full sm:p-6" role="document">
           <div>
             <div className="mt-3 text-center sm:mt-5">
-              <h3 className="text-lg leading-6 font-medium text-gray-900" id="modal-headline">
+              <h3 className="text-lg leading-6 font-medium text-gray-900" id="tutorial-heading">
                 Welcome to ReplyRocket!
               </h3>
               <div className="mt-2">
@@ -179,6 +240,7 @@ const OnboardingTutorial = ({ showOnboarding, onboardingStep, nextOnboardingStep
               type="button"
               className="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-blue-600 text-base font-medium text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 sm:col-start-2 sm:text-sm"
               onClick={nextOnboardingStep}
+              aria-label={onboardingStep < 4 ? 'Next tutorial step' : 'Finish tutorial'}
             >
               {onboardingStep < 4 ? 'Next' : 'Finish'}
             </button>
@@ -187,6 +249,7 @@ const OnboardingTutorial = ({ showOnboarding, onboardingStep, nextOnboardingStep
               className="mt-3 w-full inline-flex justify-center rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 sm:mt-0 sm:col-start-1 sm:text-sm"
               onClick={prevOnboardingStep}
               disabled={onboardingStep === 0}
+              aria-label="Previous tutorial step"
             >
               Previous
             </button>
@@ -196,6 +259,7 @@ const OnboardingTutorial = ({ showOnboarding, onboardingStep, nextOnboardingStep
               type="button"
               className="text-sm text-gray-500 hover:text-gray-600 underline"
               onClick={skipOnboarding}
+              aria-label="Skip entire tutorial"
             >
               Skip tutorial
             </button>
@@ -232,6 +296,11 @@ const EmailComposer = () => {
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [onboardingStep, setOnboardingStep] = useState(0);
   const [onboardingComplete, setOnboardingComplete] = useState(false);
+  
+  // Toast notifications
+  const [showToast, setShowToast] = useState(false);
+  const [toastMessage, setToastMessage] = useState('');
+  const [toastType, setToastType] = useState('success'); // 'success', 'error', or 'info'
 
   const {
     customerEmail,
@@ -241,10 +310,51 @@ const EmailComposer = () => {
     tone,
     setTone,
     generatedResponse,
+    editedResponse,
+    setEditedResponse,
     isGenerating,
     error,
     generateResponse,
+    saveResponse,
   } = useEmailResponse();
+
+  // Define keyboard shortcuts
+  const shortcuts = [
+    { keys: 'ctrl+enter', description: 'Generate response', category: 'Response' },
+    { keys: 'ctrl+c', description: 'Copy response to clipboard', category: 'Response' },
+    { keys: 'ctrl+s', description: 'Save response', category: 'Response' },
+    { keys: 'escape', description: 'Reset form', category: 'Form' },
+    { keys: 'alt+t', description: 'Change response tone', category: 'Settings' },
+  ];
+  
+  // Register keyboard shortcuts
+  useKeyboardShortcuts({
+    'ctrl+enter': () => {
+      if (!isGenerating && customerEmail.trim()) {
+        generateResponse();
+      }
+    },
+    'ctrl+c': () => {
+      if (editedResponse) {
+        handleCopy();
+      }
+    },
+    'ctrl+s': () => {
+      if (editedResponse) {
+        handleSave();
+      }
+    },
+    'escape': () => {
+      setCustomerEmail('');
+      setBusinessContext('');
+      setTone('professional');
+      setEditedResponse('');
+      setToastMessage('Form reset successfully');
+      setToastType('info');
+      setShowToast(true);
+      setTimeout(() => setShowToast(false), 3000);
+    },
+  });
 
   // Fetch response history on component mount
   useEffect(() => {
@@ -307,7 +417,7 @@ const EmailComposer = () => {
   useEffect(() => {
     const delayDebounce = setTimeout(() => {
       if (autoGenerate && customerEmail.trim() && !loading) {
-        handleGenerate();
+        generateResponse();
       }
     }, 800); // 800ms debounce delay
 
@@ -397,7 +507,7 @@ const EmailComposer = () => {
   // Function to load a previous response
   const loadPreviousResponse = (email, response) => {
     setCustomerEmail(email);
-    setGeneratedResponse(response);
+    setEditedResponse(response);
     
     // Scroll to the top
     window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -428,705 +538,201 @@ const EmailComposer = () => {
   const completeOnboarding = async () => {
     setShowOnboarding(false);
     setOnboardingComplete(true);
+    
+    // Save onboarding state to localStorage for faster UX on next visit
     localStorage.setItem('replyrocket_onboarding_complete', 'true');
     
+    // If in dev mode, just save the state locally
     if (devMode) {
       localStorage.setItem('dev_skip_onboarding', 'true');
       return;
     }
     
-    try {
-      // Update the user's profile in the database
-      const { error } = await supabase
-        .from('profiles')
-        .update({ onboarding_completed: true })
-        .eq('id', user.id);
-        
-      if (error) {
-        console.error('Error updating onboarding status:', error);
+    // Save onboarding completion to database if user is authenticated
+    if (user && supabase) {
+      try {
+        const { error } = await supabase
+          .from('profiles')
+          .update({ onboarding_completed: true })
+          .eq('id', user.id);
+          
+        if (error) {
+          console.error('Error saving onboarding status:', error);
+        }
+      } catch (err) {
+        console.error('Error saving onboarding status:', err);
       }
-    } catch (err) {
-      console.error('Error updating onboarding status:', err);
     }
   };
 
-  const handleGenerate = async () => {
-    if (!customerEmail.trim()) {
-      setError('Please paste a customer email in the text area above to generate a response.');
-      return;
-    }
-
-    if (!user && !devMode) {
-      setError('You need to be logged in to generate responses. Please log in or create an account to continue.');
-      return;
-    }
-
-    setLoading(true);
-    setError('');
-    setShowUpgradeModal(false);
-
+  // Handle copy to clipboard
+  const handleCopy = async () => {
+    if (!editedResponse) return;
+    
     try {
-      let token = 'dev-mode-token';
-
-      // Get real token if not in dev mode
-      if (!devMode) {
-        const { data: { session } } = await supabase.auth.getSession();
-        if (!session) {
-          setError('Your session has expired. Please log in again to continue generating responses.');
-          setLoading(false);
-          return;
-        }
-        token = session.access_token;
-      }
-
-      const result = await generateEmailResponse(
-        customerEmail, 
-        businessContext, 
-        tone, 
-        token
-      );
+      await navigator.clipboard.writeText(editedResponse);
+      // Show toast notification
+      setToastMessage('Copied to clipboard successfully!');
+      setToastType('success');
+      setShowToast(true);
       
-      // Handle the enhanced response object
-      const { response, businessName: responseBusiness } = result;
+      // Hide toast after 3 seconds
+      setTimeout(() => {
+        setShowToast(false);
+      }, 3000);
+    } catch (err) {
+      console.error('Failed to copy text: ', err);
+      setToastMessage('Failed to copy to clipboard');
+      setToastType('error');
+      setShowToast(true);
       
-      setGeneratedResponse(response);
-      setBusinessName(responseBusiness);
-      setSuccessMessage(`Response generated successfully for ${responseBusiness}!`);
+      // Hide toast after 3 seconds
+      setTimeout(() => {
+        setShowToast(false);
+      }, 3000);
+    }
+  };
 
-      // Auto-focus the response textarea for quick editing
-      if (responseTextareaRef.current) {
-        responseTextareaRef.current.focus();
-      }
-
-      // Clear success message after 3 seconds
-      setTimeout(() => setSuccessMessage(''), 3000);
+  // Handle save response
+  const handleSave = async () => {
+    try {
+      setLoading(true);
+      await saveResponse();
       
-      // Refresh the response history to include the new response
+      // Show toast notification
+      setToastMessage('Response saved successfully!');
+      setToastType('success');
+      setShowToast(true);
+      
+      // Hide toast after 3 seconds
+      setTimeout(() => {
+        setShowToast(false);
+      }, 3000);
+      
+      // Refresh response history
       fetchResponseHistory();
     } catch (err) {
-      console.error('Generation error:', err);
-      
-      // Check if this is a subscription limit error
-      if (err.errorCode === 'SUBSCRIPTION_LIMIT_REACHED') {
-        setUsageLimitInfo({
-          currentUsage: err.currentUsage,
-          limit: err.limit,
-          tier: err.tier
-        });
-        setShowUpgradeModal(true);
-      } else if (err.errorCode === 'API_RATE_LIMIT') {
-        setError('AI service is currently experiencing high demand. Please try again in a few minutes.');
-      } else if (err.errorCode === 'CONTENT_POLICY_VIOLATION') {
-        setError('Your request contains content that violates our usage policies. Please revise your email content and try again.');
-      } else if (err.errorCode === 'AUTH_ERROR') {
-        setError('Authentication error. Please log out and log back in to refresh your session.');
-      } else if (err.errorCode === 'NETWORK_ERROR') {
-        setError('Network connection issue detected. Please check your internet connection and try again.');
-      } else if (err.errorCode === 'SERVER_ERROR') {
-        setError('Our servers are experiencing technical difficulties. Our team has been notified and is working on a fix. Please try again later.');
-      } else {
-        setError('We couldn\'t generate a response at this time. Please try again or contact support if the issue persists.');
-      }
+      console.error('Error saving response:', err);
+      setToastMessage('Failed to save response');
+      setToastType('error');
+      setShowToast(true);
     } finally {
       setLoading(false);
     }
   };
-
-  const handleCopyToClipboard = () => {
-    if (!generatedResponse) {
-      setError('There\'s no response to copy. Please generate a response first.');
-      return;
-    }
-    
-    navigator.clipboard.writeText(generatedResponse)
-      .then(() => {
-        setSuccessMessage('Response copied to clipboard!');
-        setTimeout(() => setSuccessMessage(''), 2000);
-      })
-      .catch(err => {
-        console.error('Failed to copy text: ', err);
-        setError('Unable to copy to clipboard. Try selecting the text manually and using Ctrl+C or Cmd+C to copy.');
-      });
-  };
-
-  const handleSaveTemplate = async () => {
-    if (!generatedResponse.trim()) {
-      setError('There\'s no response to save as a template. Please generate a response first.');
-      return;
-    }
-
-    setLoading(true);
-    setError('');
-
-    try {
-      const templateName = prompt('Enter a name for this template:');
-
-      if (!templateName) {
-        setLoading(false);
-        return;
-      }
-
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-
-      const { error } = await supabase.from('email_templates').insert({
-        user_id: user.id,
-        template_name: templateName,
-        template_content: generatedResponse,
-        category: 'custom',
-        tone: tone,
-      });
-
-      if (error) {
-        if (error.code === '23505') {
-          throw { message: 'A template with this name already exists. Please use a different name.' };
-        } else if (error.code === '23503') {
-          throw { message: 'User authentication issue. Please log out and log back in, then try again.' };
-        } else if (error.code.startsWith('22')) {
-          throw { message: 'Invalid template data. Please check your response and try again.' };
-        } else {
-          throw { message: 'Database error. Please try again or contact support if the issue persists.' };
-        }
-      }
-
-      setSuccessMessage('Template saved successfully!');
-
-      // Clear success message after 3 seconds
-      setTimeout(() => setSuccessMessage(''), 3000);
-    } catch (err) {
-      setError(err.message || 'Failed to save template. Please try again later or contact support if the issue persists.');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // Function to handle keyboard shortcuts
-  const handleKeyboardShortcut = (e) => {
-    // Ctrl/Cmd + Enter to generate response
-    if ((e.ctrlKey || e.metaKey) && e.key === 'Enter' && !loading) {
-      e.preventDefault();
-      handleGenerate();
-    }
-    
-    // Ctrl/Cmd + Shift + C to copy response
-    if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key === 'c' && generatedResponse) {
-      e.preventDefault();
-      handleCopyToClipboard();
-    }
-  };
-
-  // Upgrade modal component
-  const UpgradeModal = () => {
-    return (
-      <div className="fixed inset-0 bg-gray-600 bg-opacity-75 flex items-center justify-center z-50 p-4">
-        <div className="bg-white rounded-lg shadow-xl max-w-md w-full p-6">
-          <div className="mb-4">
-            <h3 className="text-lg font-medium text-gray-900">Monthly Response Limit Reached</h3>
-            <p className="mt-1 text-sm text-gray-500">
-              You've used all {usageLimitInfo?.limit} email responses included in your {usageLimitInfo?.tier} plan this month. Upgrade now to continue generating responses without interruption.
-            </p>
-          </div>
-
-          <div className="bg-gray-50 rounded-md p-3 mb-4">
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-sm font-medium text-gray-700">Usage this month</span>
-              <span className="text-sm font-medium text-gray-900">
-                {usageLimitInfo?.currentUsage} / {usageLimitInfo?.limit}
-              </span>
-            </div>
-            <div className="w-full bg-gray-200 rounded-full h-2">
-              <div
-                className="bg-blue-600 h-2 rounded-full"
-                style={{
-                  width: `${Math.min(
-                    (usageLimitInfo?.currentUsage / usageLimitInfo?.limit) * 100,
-                    100
-                  )}%`,
-                }}
-              ></div>
-            </div>
-          </div>
-
-          <div className="flex flex-col space-y-3">
-            <Link 
-              href="/subscription" 
-              className="w-full inline-flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-            >
-              View Upgrade Options
-            </Link>
-            <button
-              type="button"
-              onClick={() => setShowUpgradeModal(false)}
-              className="w-full inline-flex justify-center py-2 px-4 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-            >
-              Cancel
-            </button>
-          </div>
-        </div>
-      </div>
-    );
-  };
-  
-  // Onboarding tooltip component
-  const OnboardingTooltip = ({ step, targetRef, position = 'bottom', children, onNext, onPrev, onSkip, currentStep, totalSteps }) => {
-    if (!targetRef.current) return null;
-    
-    // Get position of the target element
-    const targetRect = targetRef.current.getBoundingClientRect();
-    const windowHeight = window.innerHeight;
-    const windowWidth = window.innerWidth;
-    
-    // Base styles
-    let tooltipStyle = {
-      position: 'absolute',
-      zIndex: 50,
-      backgroundColor: 'white',
-      borderRadius: '0.5rem',
-      boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)',
-      padding: '1rem',
-      maxWidth: '18rem',
-      border: '1px solid #e5e7eb'
-    };
-    
-    // Set position based on parameter
-    switch(position) {
-      case 'top':
-        tooltipStyle = {
-          ...tooltipStyle,
-          bottom: `${windowHeight - targetRect.top + 10}px`,
-          left: `${targetRect.left + targetRect.width / 2 - 150}px`,
-        };
-        break;
-      case 'right':
-        tooltipStyle = {
-          ...tooltipStyle,
-          left: `${targetRect.right + 10}px`,
-          top: `${targetRect.top + targetRect.height / 2 - 70}px`,
-        };
-        break;
-      case 'left':
-        tooltipStyle = {
-          ...tooltipStyle,
-          right: `${windowWidth - targetRect.left + 10}px`,
-          top: `${targetRect.top + targetRect.height / 2 - 70}px`,
-        };
-        break;
-      case 'bottom':
-      default:
-        tooltipStyle = {
-          ...tooltipStyle,
-          top: `${targetRect.bottom + 10}px`,
-          left: `${targetRect.left + targetRect.width / 2 - 150}px`,
-        };
-    }
-    
-    // Create a highlight effect on the target
-    if (targetRef.current) {
-      targetRef.current.classList.add('ring-2', 'ring-blue-500', 'ring-offset-2');
-    }
-    
-    // Clean up highlight on unmount
-    useEffect(() => {
-      return () => {
-        if (targetRef.current) {
-          targetRef.current.classList.remove('ring-2', 'ring-blue-500', 'ring-offset-2');
-        }
-      };
-    }, [step]);
-    
-    return (
-      <div style={tooltipStyle} className="onboarding-tooltip">
-        <div className="text-sm text-gray-800">
-          {children}
-        </div>
-        <div className="mt-3 flex items-center justify-between">
-          <div className="text-xs text-gray-500">
-            Step {currentStep} of {totalSteps}
-          </div>
-          <div className="flex space-x-2">
-            {currentStep > 1 && (
-              <button 
-                onClick={onPrev}
-                className="px-2 py-1 text-xs text-gray-600 hover:text-gray-800"
-              >
-                Back
-              </button>
-            )}
-            <button 
-              onClick={onSkip}
-              className="px-2 py-1 text-xs text-gray-600 hover:text-gray-800"
-            >
-              Skip Tour
-            </button>
-            <button 
-              onClick={onNext}
-              className="px-3 py-1 text-xs bg-blue-600 text-white rounded hover:bg-blue-700"
-            >
-              {currentStep === totalSteps ? 'Finish' : 'Next'}
-            </button>
-          </div>
-        </div>
-      </div>
-    );
-  };
-  
-  // Onboarding overlay - darkens the rest of the UI
-  const OnboardingOverlay = () => (
-    <div 
-      className="fixed inset-0 bg-black bg-opacity-40 z-30"
-      onClick={(e) => e.stopPropagation()}
-    />
-  );
 
   return (
-    <div className="max-w-4xl mx-auto p-4">
-      {/* Onboarding overlay */}
-      {showOnboarding && <OnboardingOverlay />}
-    
-      {/* Display error message */}
-      {error && (
-        <div className="bg-red-100 border-l-4 border-red-500 text-red-700 p-4 mb-4" role="alert">
-          <p>{error}</p>
-        </div>
-      )}
+    <div className="max-w-4xl mx-auto py-8 px-4 sm:px-6 lg:px-8">
+      <header className="flex justify-between items-center mb-6">
+        <h1 className="text-3xl font-bold text-gray-900">Email Response Generator</h1>
+        <KeyboardShortcutsHelp shortcuts={shortcuts} />
+      </header>
+      <p className="text-gray-600 mb-8">
+        Generate professional, personalized email responses in seconds using AI.
+      </p>
 
-      {/* Display success message */}
-      {successMessage && (
-        <div className="bg-green-100 border-l-4 border-green-500 text-green-700 p-4 mb-4" role="alert">
-          <p>{successMessage}</p>
-        </div>
-      )}
-
-      {/* Email composer form */}
-      <div className="flex justify-between items-center mb-4">
-        <h1 className="text-xl font-bold" ref={shortcutsRef}>
-          Generate Email Response {businessName && `for ${businessName}`}
-        </h1>
-        <div className="flex items-center">
-          <div className="flex items-center mr-4">
-            <input
-              id="autoGenerate"
-              type="checkbox"
-              className="h-4 w-4 text-blue-600 rounded border-gray-300 focus:ring-blue-500"
-              checked={autoGenerate}
-              onChange={() => setAutoGenerate(!autoGenerate)}
+      <main>
+        <div className="bg-white shadow overflow-hidden sm:rounded-lg">
+          <div className="px-4 py-5 sm:p-6">
+            <EmailForm 
+              customerEmail={customerEmail}
+              setCustomerEmail={setCustomerEmail}
+              businessContext={businessContext}
+              setBusinessContext={setBusinessContext}
+              tone={tone}
+              setTone={setTone}
+              autoGenerate={autoGenerate}
+              setAutoGenerate={setAutoGenerate}
+              handleGenerate={generateResponse}
+              isGenerating={isGenerating}
             />
-            <label htmlFor="autoGenerate" className="ml-2 text-sm text-gray-700">
-              Auto-generate
-            </label>
-          </div>
-          <div className="text-xs text-gray-500">
-            Ctrl+Enter to generate
-          </div>
-        </div>
-        
-        {/* Step 1: Welcome tooltip */}
-        {showOnboarding && onboardingStep === 0 && (
-          <OnboardingTooltip
-            step={0}
-            targetRef={shortcutsRef}
-            position="bottom"
-            onNext={nextOnboardingStep}
-            onPrev={prevOnboardingStep}
-            onSkip={skipOnboarding}
-            currentStep={1}
-            totalSteps={6}
-          >
-            <h3 className="font-bold text-base mb-2">Welcome to ReplyRocket.io! 🚀</h3>
-            <p>This quick tour will show you how to generate AI-powered email responses in just a few seconds.</p>
-          </OnboardingTooltip>
-        )}
-      </div>
-
-      {/* Main content - split into two panels for desktop */}
-      <div className="flex flex-col md:flex-row gap-4">
-        {/* Left panel - inputs */}
-        <div className="w-full md:w-1/2">
-          {/* Customer email input */}
-          <div className="mb-4">
-            <label htmlFor="customerEmail" className="block mb-2 text-sm font-medium text-gray-700">
-              Customer Email
-            </label>
-            <textarea
-              id="customerEmail"
-              ref={emailInputRef}
-              className="w-full px-3 py-2 text-gray-700 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-              rows="8"
-              value={customerEmail}
-              onChange={(e) => setCustomerEmail(e.target.value)}
-              onKeyDown={handleKeyboardShortcut}
-              placeholder="Paste the customer's email here..."
-              autoFocus
-            ></textarea>
-          </div>
-          
-          {/* Step 2: Email input tooltip */}
-          {showOnboarding && onboardingStep === 1 && (
-            <OnboardingTooltip
-              step={1}
-              targetRef={emailInputRef}
-              position="bottom"
-              onNext={nextOnboardingStep}
-              onPrev={prevOnboardingStep}
-              onSkip={skipOnboarding}
-              currentStep={2}
-              totalSteps={6}
-            >
-              <h3 className="font-bold text-base mb-2">Start Here</h3>
-              <p>Paste your customer's email here. The AI will analyze it and generate a professional response.</p>
-            </OnboardingTooltip>
-          )}
-
-          {/* Options panel - collapsible */}
-          <details className="mb-4 rounded-lg border p-2" ref={advancedOptionsRef}>
-            <summary className="text-sm font-medium text-gray-700 cursor-pointer">
-              Advanced Options
-            </summary>
-            <div className="mt-3">
-              {/* Business context input */}
-              <div className="mb-3">
-                <label htmlFor="businessContext" className="block mb-2 text-sm font-medium text-gray-700">
-                  Business Context (Optional)
-                </label>
-                <textarea
-                  id="businessContext"
-                  className="w-full px-3 py-2 text-gray-700 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  rows="3"
-                  value={businessContext}
-                  onChange={(e) => setBusinessContext(e.target.value)}
-                  placeholder="Add any relevant information about your business..."
-                ></textarea>
-              </div>
-
-              {/* Tone selection */}
-              <div className="mb-3">
-                <label htmlFor="tone" className="block mb-2 text-sm font-medium text-gray-700">
-                  Response Tone
-                </label>
-                <select
-                  id="tone"
-                  className="w-full px-3 py-2 text-gray-700 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  value={tone}
-                  onChange={(e) => setTone(e.target.value)}
-                >
-                  <option value="professional">Professional</option>
-                  <option value="friendly">Friendly</option>
-                  <option value="formal">Formal</option>
-                  <option value="empathetic">Empathetic</option>
-                  <option value="concise">Concise</option>
-                </select>
-              </div>
-            </div>
-          </details>
-          
-          {/* Step 3: Advanced options tooltip */}
-          {showOnboarding && onboardingStep === 2 && (
-            <OnboardingTooltip
-              step={2}
-              targetRef={advancedOptionsRef}
-              position="bottom"
-              onNext={nextOnboardingStep}
-              onPrev={prevOnboardingStep}
-              onSkip={skipOnboarding}
-              currentStep={3}
-              totalSteps={6}
-            >
-              <h3 className="font-bold text-base mb-2">Customize Your Response</h3>
-              <p>Click here to add business context and choose the tone of your response (professional, friendly, formal, etc).</p>
-            </OnboardingTooltip>
-          )}
-
-          {/* Generate button */}
-          <button
-            ref={generateBtnRef}
-            onClick={handleGenerate}
-            disabled={loading || !customerEmail.trim()}
-            className="w-full mb-4 flex justify-center items-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50"
-          >
-            {loading ? (
-              <>
-                <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                </svg>
-                Generating...
-              </>
-            ) : (
-              'Generate Email Response'
-            )}
-          </button>
-          
-          {/* Upgrade button - only show for free or trial users */}
-          {(user?.subscription_tier === 'free' || user?.subscription_tier === 'trial') && (
-            <Link 
-              href="/subscription" 
-              className="w-full mb-4 flex justify-center items-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-green-600 hover:bg-green-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500"
-            >
-              Upgrade to Pro — Get More Responses
-            </Link>
-          )}
-          
-          {/* Step 4: Generate button tooltip */}
-          {showOnboarding && onboardingStep === 3 && (
-            <OnboardingTooltip
-              step={3}
-              targetRef={generateBtnRef}
-              position="bottom"
-              onNext={nextOnboardingStep}
-              onPrev={prevOnboardingStep}
-              onSkip={skipOnboarding}
-              currentStep={4}
-              totalSteps={6}
-            >
-              <h3 className="font-bold text-base mb-2">Generate Response</h3>
-              <p>Click this button to generate your AI response. You can also press Ctrl+Enter from the email input field.</p>
-            </OnboardingTooltip>
-          )}
-        </div>
-
-        {/* Right panel - response */}
-        <div className="w-full md:w-1/2">
-          {/* Display generated response */}
-          <div 
-            ref={responseAreaRef}
-            className={`h-full ${!generatedResponse ? 'flex items-center justify-center border-2 border-dashed border-gray-300 rounded-lg bg-gray-50' : ''}`}
-          >
-            {generatedResponse ? (
-              <>
-                <div className="mb-2 flex justify-between items-center">
-                  <h2 className="text-sm font-semibold text-gray-700">
-                    Generated Response {businessName && `(${businessName} Style)`}
-                  </h2>
-                  <div className="text-xs text-gray-500">
-                    Ctrl+Shift+C to copy
+            
+            {error && (
+              <div className="mt-4 rounded-md bg-red-50 p-4" role="alert" aria-live="assertive">
+                <div className="flex">
+                  <div className="flex-shrink-0">
+                    <svg className="h-5 w-5 text-red-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                      <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+                    </svg>
+                  </div>
+                  <div className="ml-3">
+                    <h3 className="text-sm font-medium text-red-800">Error</h3>
+                    <div className="mt-2 text-sm text-red-700">
+                      <p>{error}</p>
+                    </div>
                   </div>
                 </div>
-                <textarea
-                  ref={responseTextareaRef}
-                  className="w-full px-3 py-2 text-gray-700 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  rows="12"
-                  value={generatedResponse}
-                  onChange={(e) => setGeneratedResponse(e.target.value)}
-                  onKeyDown={handleKeyboardShortcut}
-                ></textarea>
-                <div className="mt-2 flex flex-wrap gap-2">
-                  <button
-                    onClick={handleCopyToClipboard}
-                    className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-                  >
-                    Copy to Clipboard
-                  </button>
-                  <button
-                    onClick={handleSaveTemplate}
-                    className="inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-                  >
-                    Save as Template
-                  </button>
-                </div>
-              </>
-            ) : (
-              <div className="text-center text-gray-500">
-                Your generated response will appear here
               </div>
             )}
+            
+            {generatedResponse && (
+              <ResponseViewer 
+                generatedResponse={generatedResponse}
+                editedResponse={editedResponse}
+                setEditedResponse={setEditedResponse}
+                responseTextareaRef={responseTextareaRef}
+                handleSave={handleSave}
+                handleCopy={handleCopy}
+                isLoading={loading}
+              />
+            )}
           </div>
-          
-          {/* Step 5: Response area tooltip */}
-          {showOnboarding && onboardingStep === 4 && (
-            <OnboardingTooltip
-              step={4}
-              targetRef={responseAreaRef}
-              position="left"
-              onNext={nextOnboardingStep}
-              onPrev={prevOnboardingStep}
-              onSkip={skipOnboarding}
-              currentStep={5}
-              totalSteps={6}
-            >
-              <h3 className="font-bold text-base mb-2">Your AI Response</h3>
-              <p>Your generated response will appear here. You can edit it before copying or saving as a template.</p>
-            </OnboardingTooltip>
-          )}
         </div>
-      </div>
-
-      {/* Recent Responses */}
-      <div className="mt-8 border-t pt-4">
-        <div className="flex justify-between items-center mb-4">
-          <h2 className="text-lg font-semibold">Recent Responses</h2>
-          <button
-            onClick={fetchResponseHistory}
-            className="text-sm text-blue-600 hover:text-blue-800 flex items-center"
-            disabled={loadingHistory}
-          >
-            {loadingHistory ? (
-              <svg className="animate-spin h-4 w-4 mr-1" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+      </main>
+      
+      {/* Toast notification */}
+      {showToast && (
+        <div 
+          className={`fixed bottom-4 right-4 rounded-md p-4 shadow-lg ${
+            toastType === 'success' ? 'bg-green-100' : 
+            toastType === 'error' ? 'bg-red-100' : 'bg-blue-100'
+          }`}
+          role="status"
+          aria-live="polite"
+        >
+          <div className="flex items-center">
+            {toastType === 'success' && (
+              <svg className="h-5 w-5 text-green-600 mr-2" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
               </svg>
-            ) : (
-              'Refresh'
             )}
-          </button>
+            {toastType === 'error' && (
+              <svg className="h-5 w-5 text-red-600 mr-2" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+              </svg>
+            )}
+            <p className={`text-sm ${
+              toastType === 'success' ? 'text-green-800' : 
+              toastType === 'error' ? 'text-red-800' : 'text-blue-800'
+            }`}>
+              {toastMessage}
+            </p>
+          </div>
         </div>
-        
-        {/* Step 6: Subscription and usage tooltip */}
-        {showOnboarding && onboardingStep === 5 && (
-          <OnboardingTooltip
-            step={5}
-            targetRef={{current: document.querySelector('.max-w-4xl')}}
-            position="top"
-            onNext={nextOnboardingStep}
-            onPrev={prevOnboardingStep}
-            onSkip={skipOnboarding}
-            currentStep={6}
-            totalSteps={6}
-          >
-            <h3 className="font-bold text-base mb-2">Usage & Subscription</h3>
-            <p>Your free plan includes 25 responses per month. Need more? Click on your profile menu and select "Subscription" to upgrade your plan.</p>
-          </OnboardingTooltip>
-        )}
-
-        {loadingHistory ? (
-          <div className="text-center py-4">
-            <svg className="animate-spin h-6 w-6 mx-auto text-gray-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-            </svg>
-          </div>
-        ) : responseHistory.length > 0 ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {responseHistory.map((item) => (
-              <div key={item.id} className="border rounded-lg p-4 bg-gray-50 hover:shadow-md transition-shadow">
-                <div className="flex justify-between mb-2">
-                  <span className="text-sm font-medium text-gray-700">
-                    {formatDate(item.created_at)}
-                  </span>
-                  <span className="text-xs px-2 py-1 rounded-full bg-blue-100 text-blue-800">
-                    {item.tone_requested || 'professional'}
-                  </span>
-                </div>
-                <p className="text-sm text-gray-600 mb-2">{truncateText(item.customer_email, 150)}</p>
-                <p className="text-sm text-gray-800 mb-3">{truncateText(item.generated_response, 200)}</p>
-                <button
-                  onClick={() => loadPreviousResponse(item.customer_email, item.generated_response)}
-                  className="text-sm text-blue-600 hover:text-blue-800"
-                >
-                  Load This Response
-                </button>
-              </div>
-            ))}
-          </div>
-        ) : (
-          <div className="text-center py-4 text-gray-500">
-            No recent responses found. Generate your first response above!
-          </div>
-        )}
-      </div>
-
-      {/* Upgrade modal */}
-      {showUpgradeModal && <UpgradeModal />}
+      )}
+      
+      <OnboardingTutorial 
+        showOnboarding={showOnboarding}
+        onboardingStep={onboardingStep}
+        nextOnboardingStep={() => {
+          if (onboardingStep < 4) {
+            setOnboardingStep(onboardingStep + 1);
+          } else {
+            completeOnboarding();
+          }
+        }}
+        prevOnboardingStep={() => {
+          if (onboardingStep > 0) {
+            setOnboardingStep(onboardingStep - 1);
+          }
+        }}
+        skipOnboarding={completeOnboarding}
+        emailInputRef={emailInputRef}
+        generateBtnRef={generateBtnRef}
+        advancedOptionsRef={advancedOptionsRef}
+        responseAreaRef={responseAreaRef}
+        shortcutsRef={shortcutsRef}
+      />
     </div>
   );
 };
