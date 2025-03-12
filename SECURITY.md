@@ -8,7 +8,7 @@
 
 ## Reporting a Vulnerability
 
-We take the security of QuickReply AI seriously. If you believe you have found a security vulnerability, please report it to us as described below.
+We take the security of ReplyRocket.io seriously. If you believe you have found a security vulnerability, please report it to us as described below.
 
 ### How to Report a Security Vulnerability?
 
@@ -37,7 +37,7 @@ Please include the following information in your report:
 
 ## Security Measures
 
-QuickReply AI implements several security measures:
+ReplyRocket.io implements several security measures:
 
 1. **Authentication**
    - JWT token validation

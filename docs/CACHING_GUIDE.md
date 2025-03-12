@@ -1,6 +1,6 @@
 # Caching Implementation Guide
 
-This guide explains the caching system implemented in the QuickReply.ai application to optimize API calls and improve performance.
+This guide explains the caching system implemented in the ReplyRocket.io application to optimize API calls and improve performance.
 
 ## Overview
 

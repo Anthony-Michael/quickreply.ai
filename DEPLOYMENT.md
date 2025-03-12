@@ -1,6 +1,6 @@
-# Deployment Guide for QuickReply.ai
+# Deployment Guide for ReplyRocket.io
 
-This guide provides instructions for deploying the QuickReply.ai application to various hosting platforms, allowing you to access it from a custom domain.
+This guide provides instructions for deploying the ReplyRocket.io application to various hosting platforms, allowing you to access it from a custom domain.
 
 ## Option 1: Deploy to Vercel (Recommended for Next.js)
 

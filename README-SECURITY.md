@@ -1,6 +1,6 @@
 # Supabase Security Enhancement Guide
 
-This guide will help you implement and verify Row Level Security (RLS) policies for your QuickReply.ai Supabase database.
+This guide will help you implement and verify Row Level Security (RLS) policies for your ReplyRocket.io Supabase database.
 
 ## Overview
 

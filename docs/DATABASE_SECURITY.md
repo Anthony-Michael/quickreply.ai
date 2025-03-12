@@ -1,10 +1,10 @@
-# Database Security in QuickReply.ai
+# Database Security in ReplyRocket.io
 
-This document explains the database security measures implemented in the QuickReply.ai application, with a focus on Supabase Row Level Security (RLS) policies.
+This document explains the database security measures implemented in the ReplyRocket.io application, with a focus on Supabase Row Level Security (RLS) policies.
 
 ## Overview
 
-QuickReply.ai uses Supabase as its database and authentication provider. To ensure secure data access, we've implemented comprehensive Row Level Security (RLS) policies that limit data access based on user authentication status and user ID.
+ReplyRocket.io uses Supabase as its database and authentication provider. To ensure secure data access, we've implemented comprehensive Row Level Security (RLS) policies that limit data access based on user authentication status and user ID.
 
 ## Row Level Security Principles
 
@@ -145,4 +145,4 @@ When making schema changes:
 3. Apply the changes using the provided scripts
 4. Run the test script to verify the policies are working correctly
 
-By following this documentation, developers can ensure that data in the QuickReply.ai application remains secure and properly isolated between users. 
+By following this documentation, developers can ensure that data in the ReplyRocket.io application remains secure and properly isolated between users. 

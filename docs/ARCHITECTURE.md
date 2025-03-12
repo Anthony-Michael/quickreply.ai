@@ -1,8 +1,8 @@
-# QuickReply AI - Technical Architecture
+# ReplyRocket.io - Technical Architecture
 
 ## System Overview
 
-QuickReply AI is a React-based web application that leverages AI to help users generate professional email responses. The system is built with a modern tech stack and follows a component-based architecture.
+ReplyRocket.io is a React-based web application that leverages AI to help users generate professional email responses. The system is built with a modern tech stack and follows a component-based architecture.
 
 ## Core Components
 
