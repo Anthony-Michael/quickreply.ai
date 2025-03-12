@@ -13,59 +13,63 @@ jest.mock('./lib/supabase', () => {
     update: jest.fn(() => mockFromReturn),
     delete: jest.fn(() => mockFromReturn),
     eq: jest.fn(() => mockFromReturn),
-    single: jest.fn(() => Promise.resolve({
-      data: {
-        id: 'profile-id',
-        user_id: 'test-user-id',
-        email: 'test@example.com',
-        business_name: 'Test Business',
-        business_description: 'Test Description',
-        monthly_responses_limit: 100,
-        monthly_responses_used: 25,
-        subscription_tier: 'pro',
-        subscription_end_date: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
-      },
-      error: null,
-    })),
+    single: jest.fn(() =>
+      Promise.resolve({
+        data: {
+          id: 'profile-id',
+          user_id: 'test-user-id',
+          email: 'test@example.com',
+          business_name: 'Test Business',
+          business_description: 'Test Description',
+          monthly_responses_limit: 100,
+          monthly_responses_used: 25,
+          subscription_tier: 'pro',
+          subscription_end_date: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
+        },
+        error: null,
+      })
+    ),
     match: jest.fn(() => mockFromReturn),
     order: jest.fn(() => mockFromReturn),
-    limit: jest.fn(() => Promise.resolve({
-      data: [
-        { 
-          id: 'template-id-1', 
-          template_name: 'Template 1', 
-          template_content: 'Template content 1',
-          created_at: new Date().toISOString(),
-        },
-        { 
-          id: 'template-id-2', 
-          template_name: 'Template 2', 
-          template_content: 'Template content 2',
-          created_at: new Date().toISOString(),
-        }
-      ],
-      error: null,
-    })),
+    limit: jest.fn(() =>
+      Promise.resolve({
+        data: [
+          {
+            id: 'template-id-1',
+            template_name: 'Template 1',
+            template_content: 'Template content 1',
+            created_at: new Date().toISOString(),
+          },
+          {
+            id: 'template-id-2',
+            template_name: 'Template 2',
+            template_content: 'Template content 2',
+            created_at: new Date().toISOString(),
+          },
+        ],
+        error: null,
+      })
+    ),
   };
 
   // Create subscription mock
   const subscriptionMock = {
-    unsubscribe: jest.fn()
+    unsubscribe: jest.fn(),
   };
 
   // Create auth mock with all required methods
   const authMock = {
     getSession: jest.fn().mockResolvedValue({
-      data: { 
-        session: { 
-          user: { id: 'test-user-id', email: 'test@example.com' } 
-        } 
+      data: {
+        session: {
+          user: { id: 'test-user-id', email: 'test@example.com' },
+        },
       },
       error: null,
     }),
     getUser: jest.fn().mockResolvedValue({
-      data: { 
-        user: { id: 'test-user-id', email: 'test@example.com' } 
+      data: {
+        user: { id: 'test-user-id', email: 'test@example.com' },
       },
       error: null,
     }),
@@ -98,25 +102,27 @@ jest.mock('./lib/supabase', () => {
 });
 
 // Mock window.matchMedia
-window.matchMedia = window.matchMedia || function() {
-  return {
-    matches: false,
-    addListener: function() {},
-    removeListener: function() {}
+window.matchMedia =
+  window.matchMedia ||
+  function () {
+    return {
+      matches: false,
+      addListener: function () {},
+      removeListener: function () {},
+    };
   };
-};
 
 // Mock console methods to reduce noise in tests
 const originalConsoleError = console.error;
 console.error = jest.fn((...args) => {
   // Filter out specific React errors that would clutter the test output
   if (
-    typeof args[0] === 'string' && 
-    (args[0].includes('Warning:') || 
-     args[0].includes('Error loading dashboard data') ||
-     args[0].includes('Error loading subscription data'))
+    typeof args[0] === 'string' &&
+    (args[0].includes('Warning:') ||
+      args[0].includes('Error loading dashboard data') ||
+      args[0].includes('Error loading subscription data'))
   ) {
     return;
   }
   originalConsoleError(...args);
-}); 
+});

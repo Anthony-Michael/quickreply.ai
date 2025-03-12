@@ -1,0 +1,11 @@
+CUSTOMER_EMAIL,BUSINESS_CONTEXT,TONE
+"Hello, I'm interested in your product. Can you tell me more about the pricing and features?","We offer a SaaS product with monthly subscription at $29/month.",professional
+"I'm having trouble with your service. It's been down for 2 hours now and this is affecting my business.","We have a 99.9% uptime guarantee and immediate support for all customers.",empathetic
+"I'd like to request a demo of your premium features. When would be a good time to schedule this?","We offer live demos Monday through Friday between 9am and 5pm EST.",friendly
+"Your product is too expensive compared to competitors. Why should I choose you?","Our product offers unique features not available with competitors, including AI-powered responses and integration with all major platforms.",professional
+"I purchased your product last week but haven't received my license key yet. Please help.","All license keys are typically delivered within 10 minutes of purchase. There might be a delay due to payment processing.",formal
+"Can you customize your solution for my enterprise? We need specific features for our workflow.","We offer enterprise customization for clients with more than 50 users. Custom development starts at $5,000.",professional
+"How secure is your platform? We deal with sensitive customer data and need assurances.","We are SOC 2 compliant and encrypt all data both in transit and at rest. We also offer custom security solutions.",formal
+"I love your product! It's saved me so much time. Do you have a referral program?","We have a referral program that gives both you and your referral 20% off for 3 months.",friendly
+"I'm considering switching from Competitor X to your platform. What's the migration process like?","We offer a white-glove migration service for all new customers, with dedicated support for 30 days.",professional
+"What kind of support do you offer? Is it 24/7 or only during business hours?","We provide email support 24/7 and live chat during business hours (9am-6pm EST). Premium plans include phone support.",concise 

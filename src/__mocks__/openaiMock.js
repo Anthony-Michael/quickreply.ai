@@ -14,4 +14,4 @@ const openaiMock = {
   saveEmailHistory: mockSaveEmailHistory,
 };
 
-export default openaiMock; 
+export default openaiMock;

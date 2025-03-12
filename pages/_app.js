@@ -4,6 +4,7 @@ import '../styles/output.css';
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
 import { SessionContextProvider } from '@supabase/auth-helpers-react';
 import Navigation from '../src/components/Navigation';
+import { QueryProvider } from '../src/lib/react-query';
 
 // Error boundary component to catch rendering errors
 class ErrorBoundary extends Component {
@@ -222,26 +223,28 @@ function MyApp({ Component, pageProps }) {
     return (
       <ErrorBoundary>
         <SessionContextProvider supabaseClient={supabaseClient} initialSession={pageProps.initialSession}>
-          <div className="min-h-screen bg-gray-50">
-            {/* Environment Banner - Only shown in non-production environments */}
-            {environment !== 'production' && (
-              <div className={`sticky top-0 z-50 w-full p-2 text-white text-center text-sm font-medium ${
-                environment === 'staging' ? 'bg-purple-600' : 
-                environment === 'preview' ? 'bg-blue-600' : 
-                environment === 'development' ? 'bg-green-600' : 'bg-orange-600'
-              }`}>
-                {environment.toUpperCase()} ENVIRONMENT
-              </div>
-            )}
-            {!isMockPage(pageProps.pathname) && <Navigation />}
-            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-              <Component {...pageProps} fallback={
-                <div className="p-4 bg-gray-100 rounded-md">
-                  <p>Loading content...</p>
+          <QueryProvider>
+            <div className="min-h-screen bg-gray-50">
+              {/* Environment Banner - Only shown in non-production environments */}
+              {environment !== 'production' && (
+                <div className={`sticky top-0 z-50 w-full p-2 text-white text-center text-sm font-medium ${
+                  environment === 'staging' ? 'bg-purple-600' : 
+                  environment === 'preview' ? 'bg-blue-600' : 
+                  environment === 'development' ? 'bg-green-600' : 'bg-orange-600'
+                }`}>
+                  {environment.toUpperCase()} ENVIRONMENT
                 </div>
-              } />
+              )}
+              {!isMockPage(pageProps.pathname) && <Navigation />}
+              <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+                <Component {...pageProps} fallback={
+                  <div className="p-4 bg-gray-100 rounded-md">
+                    <p>Loading content...</p>
+                  </div>
+                } />
+              </div>
             </div>
-          </div>
+          </QueryProvider>
         </SessionContextProvider>
       </ErrorBoundary>
     );

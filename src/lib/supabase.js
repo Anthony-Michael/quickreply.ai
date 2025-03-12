@@ -10,66 +10,70 @@ const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 // Create a development mode client that avoids real API calls
 export const createDevClient = () => {
   console.log('Using development mode Supabase client');
-  
+
   // Return a mock Supabase client
   return {
     auth: {
-      getUser: () => Promise.resolve({
-        data: { 
-          user: { 
-            id: 'dev-user-id', 
-            email: 'dev@example.com',
-            user_metadata: {
-              full_name: 'Development User'
-            }
-          }
-        }
-      }),
-      getSession: () => Promise.resolve({
-        data: {
-          session: {
+      getUser: () =>
+        Promise.resolve({
+          data: {
             user: {
               id: 'dev-user-id',
               email: 'dev@example.com',
               user_metadata: {
-                full_name: 'Development User'
-              }
+                full_name: 'Development User',
+              },
             },
-            access_token: 'dev-mode-token'
-          }
-        }
-      }),
+          },
+        }),
+      getSession: () =>
+        Promise.resolve({
+          data: {
+            session: {
+              user: {
+                id: 'dev-user-id',
+                email: 'dev@example.com',
+                user_metadata: {
+                  full_name: 'Development User',
+                },
+              },
+              access_token: 'dev-mode-token',
+            },
+          },
+        }),
       onAuthStateChange: (callback) => {
         callback('SIGNED_IN', {
           user: {
             id: 'dev-user-id',
-            email: 'dev@example.com'
-          }
+            email: 'dev@example.com',
+          },
         });
         return { data: { subscription: { unsubscribe: () => {} } } };
       },
       signOut: () => Promise.resolve({ error: null }),
-      signInWithPassword: () => Promise.resolve({
-        data: {
-          user: {
-            id: 'dev-user-id',
-            email: 'dev@example.com'
+      signInWithPassword: () =>
+        Promise.resolve({
+          data: {
+            user: {
+              id: 'dev-user-id',
+              email: 'dev@example.com',
+            },
+            session: {
+              access_token: 'fake-jwt-token',
+            },
           },
-          session: {
-            access_token: 'fake-jwt-token'
-          }
-        },
-        error: null
-      }),
-      signUp: () => Promise.resolve({
-        data: {
-          user: {
-            id: 'dev-user-id',
-            email: 'dev@example.com'
-          }
-        },
-        error: null
-      })
+          error: null,
+        }),
+      signUp: () =>
+        Promise.resolve({
+          data: {
+            user: {
+              id: 'dev-user-id',
+              email: 'dev@example.com',
+            },
+          },
+          error: null,
+        }),
     },
     from: (table) => {
       // Mock database tables
@@ -83,8 +87,8 @@ export const createDevClient = () => {
             monthly_responses_limit: 25,
             monthly_responses_used: 0,
             business_name: 'Dev Company',
-            business_description: 'A company used for development testing'
-          }
+            business_description: 'A company used for development testing',
+          },
         ],
         email_history: Array(5)
           .fill()
@@ -94,10 +98,10 @@ export const createDevClient = () => {
             created_at: new Date(Date.now() - i * 86400000).toISOString(),
             customer_email: `Mock customer email ${i}`,
             generated_response: `Mock response ${i}`,
-            tone_requested: ['professional', 'friendly', 'formal', 'empathetic', 'concise'][i % 5]
-          }))
+            tone_requested: ['professional', 'friendly', 'formal', 'empathetic', 'concise'][i % 5],
+          })),
       };
-      
+
       // Create a query builder for the selected table
       return {
         select: (columns) => ({
@@ -108,37 +112,37 @@ export const createDevClient = () => {
                 const mockData = tables[table] || [];
                 return Promise.resolve({
                   data: mockData.slice(0, limit),
-                  error: null
+                  error: null,
                 });
               },
               single: () => {
                 // Find the matching record
-                const record = (tables[table] || []).find(r => r[field] === value);
+                const record = (tables[table] || []).find((r) => r[field] === value);
                 return Promise.resolve({
                   data: record || null,
-                  error: null
+                  error: null,
                 });
-              }
+              },
             }),
             single: () => {
               // Find the matching record
-              const record = (tables[table] || []).find(r => r[field] === value);
+              const record = (tables[table] || []).find((r) => r[field] === value);
               return Promise.resolve({
                 data: record || null,
-                error: null
+                error: null,
               });
-            }
-          })
+            },
+          }),
         }),
         insert: (data) => Promise.resolve({ data, error: null }),
         update: (data) => Promise.resolve({ data, error: null }),
-        upsert: (data) => Promise.resolve({ data, error: null })
+        upsert: (data) => Promise.resolve({ data, error: null }),
       };
-    }
+    },
   };
 };
 
 // Initialize Supabase client
-export const supabase = isDevelopmentMode 
-  ? createDevClient() 
+export const supabase = isDevelopmentMode
+  ? createDevClient()
   : createClient(supabaseUrl, supabaseAnonKey);

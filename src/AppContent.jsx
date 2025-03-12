@@ -1,14 +1,35 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, Suspense } from 'react';
+import PropTypes from 'prop-types';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { supabase } from './lib/supabase';
+import { trackedLazyImport } from './lib/lazyLoadAnalytics';
 
-// Import components
-import Dashboard from './components/Dashboard';
-import EmailComposer from './components/EmailComposer';
-import SubscriptionManagement from './components/SubscriptionManagement';
-import ProfileSettings from './components/ProfileSettings';
+// Import Navigation and Auth normally since they're needed immediately
 import Navigation from './components/Navigation';
 import Auth from './components/Auth';
+import DevLazyLoadStats from './components/DevLazyLoadStats';
+
+// Lazy load components that aren't needed immediately with tracking
+const Dashboard = React.lazy(() =>
+  trackedLazyImport(() => import('./components/Dashboard'), 'Dashboard')
+);
+const EmailComposer = React.lazy(() =>
+  trackedLazyImport(() => import('./components/EmailComposer'), 'EmailComposer')
+);
+const SubscriptionManagement = React.lazy(() =>
+  trackedLazyImport(() => import('./components/SubscriptionManagement'), 'SubscriptionManagement')
+);
+const ProfileSettings = React.lazy(() =>
+  trackedLazyImport(() => import('./components/ProfileSettings'), 'ProfileSettings')
+);
+
+// Loading fallback component
+const LoadingFallback = () => (
+  <div className='flex justify-center items-center h-screen'>
+    <div className='animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500'></div>
+    <p className='ml-3 text-lg text-gray-700'>Loading...</p>
+  </div>
+);
 
 // Protected Route wrapper component
 const ProtectedRoute = ({ children }) => {
@@ -33,73 +54,89 @@ const ProtectedRoute = ({ children }) => {
   }, []);
 
   if (loading) {
-    return <div className="flex justify-center items-center h-screen">Loading...</div>;
+    return <div className='flex justify-center items-center h-screen'>Loading...</div>;
   }
 
   if (!user) {
-    return <Navigate to="/login" />;
+    return <Navigate to='/login' />;
   }
 
   return children;
 };
 
+ProtectedRoute.propTypes = {
+  children: PropTypes.node.isRequired,
+};
+
 const AppContent = () => {
   return (
     <Router>
-      <div className="min-h-screen bg-gray-50">
+      <div className='min-h-screen bg-gray-50'>
         <Navigation />
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+        <div className='max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6'>
           <Routes>
             {/* Public routes */}
-            <Route path="/login" element={<Auth />} />
-            <Route path="/signup" element={<Auth />} />
+            <Route path='/login' element={<Auth />} />
+            <Route path='/signup' element={<Auth />} />
 
             {/* Protected routes */}
             <Route
-              path="/"
+              path='/'
               element={
                 <ProtectedRoute>
-                  <Dashboard />
+                  <Suspense fallback={<LoadingFallback />}>
+                    <Dashboard />
+                  </Suspense>
                 </ProtectedRoute>
               }
             />
             <Route
-              path="/dashboard"
+              path='/dashboard'
               element={
                 <ProtectedRoute>
-                  <Dashboard />
+                  <Suspense fallback={<LoadingFallback />}>
+                    <Dashboard />
+                  </Suspense>
                 </ProtectedRoute>
               }
             />
             <Route
-              path="/compose"
+              path='/compose'
               element={
                 <ProtectedRoute>
-                  <EmailComposer />
+                  <Suspense fallback={<LoadingFallback />}>
+                    <EmailComposer />
+                  </Suspense>
                 </ProtectedRoute>
               }
             />
             <Route
-              path="/subscription"
+              path='/subscription'
               element={
                 <ProtectedRoute>
-                  <SubscriptionManagement />
+                  <Suspense fallback={<LoadingFallback />}>
+                    <SubscriptionManagement />
+                  </Suspense>
                 </ProtectedRoute>
               }
             />
             <Route
-              path="/profile"
+              path='/profile'
               element={
                 <ProtectedRoute>
-                  <ProfileSettings />
+                  <Suspense fallback={<LoadingFallback />}>
+                    <ProfileSettings />
+                  </Suspense>
                 </ProtectedRoute>
               }
             />
           </Routes>
         </div>
+        {/* Development performance monitor */}
+        <DevLazyLoadStats />
       </div>
     </Router>
   );
 };
 
-export default AppContent; 
+export default AppContent;
