@@ -1,4 +1,10 @@
-import { QueryClient, QueryClientProvider, useQuery, useMutation, useQueryClient } from 'react-query';
+import {
+  QueryClient,
+  QueryClientProvider,
+  useQuery,
+  useMutation,
+  useQueryClient,
+} from 'react-query';
 import { supabase } from './supabase';
 
 // Create a client
@@ -9,7 +15,7 @@ export const queryClient = new QueryClient({
       staleTime: 1000 * 60 * 5, // 5 minutes
       cacheTime: 1000 * 60 * 30, // 30 minutes
       retry: 1,
-      onError: (err) => console.error('Query error:', err)
+      onError: (err) => console.error('Query error:', err),
     },
   },
 });
@@ -23,22 +29,24 @@ export function useUserProfile() {
   return useQuery(
     'userProfile',
     async () => {
-      const { data: { user } } = await supabase.auth.getUser();
-      
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+
       if (!user) {
         throw new Error('Not authenticated');
       }
-      
+
       const { data, error } = await supabase
         .from('profiles')
         .select('*')
         .eq('id', user.id)
         .single();
-        
+
       if (error) {
         throw error;
       }
-      
+
       return data;
     },
     {
@@ -50,7 +58,9 @@ export function useUserProfile() {
       onError: async (error) => {
         if (error.message?.includes('No rows found')) {
           try {
-            const { data: { user } } = await supabase.auth.getUser();
+            const {
+              data: { user },
+            } = await supabase.auth.getUser();
             if (user) {
               const defaultProfile = {
                 id: user.id,
@@ -59,11 +69,11 @@ export function useUserProfile() {
                 monthly_responses_limit: 25,
                 monthly_responses_used: 0,
                 business_name: 'Your Business',
-                business_description: 'Your business description'
+                business_description: 'Your business description',
               };
-              
+
               await supabase.from('profiles').upsert([defaultProfile]);
-              
+
               // Invalidate the query to refetch with the new profile
               queryClient.invalidateQueries('userProfile');
             }
@@ -71,7 +81,7 @@ export function useUserProfile() {
             console.error('Failed to create default profile:', createError);
           }
         }
-      }
+      },
     }
   );
 }
@@ -81,15 +91,17 @@ export function useUserProfile() {
  */
 export function useUpdateUserProfile() {
   const queryClient = useQueryClient();
-  
+
   return useMutation(
     async (profileData) => {
-      const { data: { user } } = await supabase.auth.getUser();
-      
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+
       if (!user) {
         throw new Error('Not authenticated');
       }
-      
+
       const { data, error } = await supabase
         .from('profiles')
         .update({
@@ -97,11 +109,11 @@ export function useUpdateUserProfile() {
           updated_at: new Date(),
         })
         .eq('id', user.id);
-        
+
       if (error) {
         throw error;
       }
-      
+
       return data;
     },
     {
@@ -120,15 +132,17 @@ export function useEmailHistory(limit = 10, page = 0, dateRange = 30) {
   return useQuery(
     ['emailHistory', limit, page, dateRange],
     async () => {
-      const { data: { user } } = await supabase.auth.getUser();
-      
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+
       if (!user) {
         throw new Error('Not authenticated');
       }
-      
+
       const thirtyDaysAgo = new Date();
       thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - dateRange);
-      
+
       const { data, error, count } = await supabase
         .from('email_history')
         .select('*', { count: 'exact' })
@@ -136,11 +150,11 @@ export function useEmailHistory(limit = 10, page = 0, dateRange = 30) {
         .gte('created_at', thirtyDaysAgo.toISOString())
         .order('created_at', { ascending: false })
         .range(page * limit, (page + 1) * limit - 1);
-        
+
       if (error) {
         throw error;
       }
-      
+
       return { data, count };
     },
     {
@@ -155,7 +169,7 @@ export function useEmailHistory(limit = 10, page = 0, dateRange = 30) {
  */
 export function useSubscriptionData() {
   const { data: userProfile } = useUserProfile();
-  
+
   return useQuery(
     'subscriptionData',
     async () => {
@@ -164,30 +178,30 @@ export function useSubscriptionData() {
           plan: userProfile?.subscription_tier || 'free',
           responseLimit: userProfile?.monthly_responses_limit || 25,
           responsesUsed: userProfile?.monthly_responses_used || 0,
-          subscriptionEndDate: userProfile?.subscription_end_date || null
+          subscriptionEndDate: userProfile?.subscription_end_date || null,
         };
       }
-      
+
       // Only fetch from API if there's an active subscription
       const response = await fetch('/api/subscription-status', {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${(await supabase.auth.getSession()).data.session?.access_token}`
-        }
+          Authorization: `Bearer ${(await supabase.auth.getSession()).data.session?.access_token}`,
+        },
       });
-      
+
       if (!response.ok) {
         throw new Error('Failed to fetch subscription data');
       }
-      
+
       return await response.json();
     },
     {
       // Only run this query if we have the user profile
       enabled: !!userProfile,
       // Cache subscription data for 5 minutes
-      staleTime: 1000 * 60 * 5
+      staleTime: 1000 * 60 * 5,
     }
   );
 }
@@ -196,9 +210,5 @@ export function useSubscriptionData() {
  * QueryClientProvider to wrap your application
  */
 export function QueryProvider({ children }) {
-  return (
-    <QueryClientProvider client={queryClient}>
-      {children}
-    </QueryClientProvider>
-  );
-} 
+  return <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>;
+}

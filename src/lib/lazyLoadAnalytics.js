@@ -11,12 +11,12 @@ const componentLoadTimes = {};
  */
 export const trackComponentLoadStart = (componentName) => {
   if (!componentName) return;
-  
+
   componentLoadTimes[componentName] = {
     startTime: performance.now(),
-    loaded: false
+    loaded: false,
   };
-  
+
   console.debug(`[LazyLoad] Started loading: ${componentName}`);
 };
 
@@ -26,25 +26,25 @@ export const trackComponentLoadStart = (componentName) => {
  */
 export const trackComponentLoadEnd = (componentName) => {
   if (!componentName || !componentLoadTimes[componentName]) return;
-  
+
   const { startTime } = componentLoadTimes[componentName];
   const loadTime = performance.now() - startTime;
-  
+
   componentLoadTimes[componentName] = {
     ...componentLoadTimes[componentName],
     loadTime,
     loaded: true,
-    endTime: performance.now()
+    endTime: performance.now(),
   };
-  
+
   console.debug(`[LazyLoad] Finished loading: ${componentName} (${loadTime.toFixed(2)}ms)`);
-  
+
   // Send to analytics if available
   try {
     if (window.gtag) {
       window.gtag('event', 'component_lazy_loaded', {
         component_name: componentName,
-        load_time_ms: loadTime
+        load_time_ms: loadTime,
       });
     }
   } catch (error) {
@@ -60,8 +60,8 @@ export const trackComponentLoadEnd = (componentName) => {
  */
 export const trackedLazyImport = (importFn, componentName) => {
   trackComponentLoadStart(componentName);
-  
-  return importFn().then(module => {
+
+  return importFn().then((module) => {
     trackComponentLoadEnd(componentName);
     return module;
   });
@@ -75,8 +75,8 @@ export const getComponentLoadSummary = () => {
   return Object.entries(componentLoadTimes).reduce((summary, [name, data]) => {
     summary[name] = {
       loaded: data.loaded,
-      loadTime: data.loadTime ? `${data.loadTime.toFixed(2)}ms` : 'Not loaded'
+      loadTime: data.loadTime ? `${data.loadTime.toFixed(2)}ms` : 'Not loaded',
     };
     return summary;
   }, {});
-}; 
+};

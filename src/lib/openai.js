@@ -8,7 +8,12 @@
  * @returns {Promise<string>} - A promise that resolves to the generated email response.
  * @throws {Error} - If the user has exceeded the rate limit or if there is an error generating the response.
  */
-export async function generateEmailResponse(customerEmail, businessContext, tone = 'professional', token) {
+export async function generateEmailResponse(
+  customerEmail,
+  businessContext,
+  tone = 'professional',
+  token
+) {
   try {
     // Check if token is provided (should be passed from the component)
     if (!token) {
@@ -17,8 +22,9 @@ export async function generateEmailResponse(customerEmail, businessContext, tone
 
     // Create a fallback response in case of errors
     const fallbackResponse = {
-      response: 'Thank you for your email. We appreciate your interest in our services. Our team will review your questions and get back to you with detailed information shortly. If you have any urgent inquiries, please don\'t hesitate to call our customer service line.',
-      businessName: 'Our Company'
+      response:
+        "Thank you for your email. We appreciate your interest in our services. Our team will review your questions and get back to you with detailed information shortly. If you have any urgent inquiries, please don't hesitate to call our customer service line.",
+      businessName: 'Our Company',
     };
 
     try {
@@ -27,18 +33,18 @@ export async function generateEmailResponse(customerEmail, businessContext, tone
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
+          Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify({
           customerEmail,
           businessContext,
-          tone
+          tone,
         }),
       });
 
       if (!response.ok) {
         const errorData = await response.json();
-        
+
         // Check for subscription limit error
         if (response.status === 403 && errorData.errorCode === 'SUBSCRIPTION_LIMIT_REACHED') {
           // Create a custom error with all the subscription details
@@ -49,25 +55,25 @@ export async function generateEmailResponse(customerEmail, businessContext, tone
           subscriptionError.tier = errorData.tier;
           throw subscriptionError;
         }
-        
+
         throw new Error(errorData.error || 'Failed to generate response');
       }
 
       const data = await response.json();
-      
+
       // Return both the response text and business name
       return {
         response: data.response || fallbackResponse.response,
-        businessName: data.businessName || fallbackResponse.businessName
+        businessName: data.businessName || fallbackResponse.businessName,
       };
     } catch (apiError) {
       console.error('API error:', apiError);
-      
+
       // If this is a subscription error, rethrow it
       if (apiError.errorCode === 'SUBSCRIPTION_LIMIT_REACHED') {
         throw apiError;
       }
-      
+
       // For development mode or other errors, return a mock response
       console.warn('Falling back to default response');
       return fallbackResponse;

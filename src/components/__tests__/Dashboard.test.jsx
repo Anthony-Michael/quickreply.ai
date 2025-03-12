@@ -6,19 +6,19 @@ import { supabase } from '../../lib/supabase';
 
 // Mock Recharts components
 jest.mock('recharts', () => ({
-  ResponsiveContainer: ({ children }) => <div data-testid="responsive-container">{children}</div>,
-  LineChart: ({ children }) => <div data-testid="line-chart">{children}</div>,
-  BarChart: ({ children }) => <div data-testid="bar-chart">{children}</div>,
-  PieChart: ({ children }) => <div data-testid="pie-chart">{children}</div>,
-  Line: () => <div data-testid="line" />,
-  Bar: () => <div data-testid="bar" />,
-  Pie: () => <div data-testid="pie" />,
-  Cell: () => <div data-testid="cell" />,
-  XAxis: () => <div data-testid="x-axis" />,
-  YAxis: () => <div data-testid="y-axis" />,
-  CartesianGrid: () => <div data-testid="cartesian-grid" />,
-  Tooltip: () => <div data-testid="tooltip" />,
-  Legend: () => <div data-testid="legend" />,
+  ResponsiveContainer: ({ children }) => <div data-testid='responsive-container'>{children}</div>,
+  LineChart: ({ children }) => <div data-testid='line-chart'>{children}</div>,
+  BarChart: ({ children }) => <div data-testid='bar-chart'>{children}</div>,
+  PieChart: ({ children }) => <div data-testid='pie-chart'>{children}</div>,
+  Line: () => <div data-testid='line' />,
+  Bar: () => <div data-testid='bar' />,
+  Pie: () => <div data-testid='pie' />,
+  Cell: () => <div data-testid='cell' />,
+  XAxis: () => <div data-testid='x-axis' />,
+  YAxis: () => <div data-testid='y-axis' />,
+  CartesianGrid: () => <div data-testid='cartesian-grid' />,
+  Tooltip: () => <div data-testid='tooltip' />,
+  Legend: () => <div data-testid='legend' />,
 }));
 
 // Mock profile data for tests
@@ -39,7 +39,9 @@ const mockEmailHistoryData = Array(10)
   .map((_, i) => ({
     id: `email-${i}`,
     created_at: new Date(Date.now() - i * 86400000).toISOString(),
-    tone_requested: ['professional', 'friendly', 'formal', 'empathetic'][Math.floor(Math.random() * 4)],
+    tone_requested: ['professional', 'friendly', 'formal', 'empathetic'][
+      Math.floor(Math.random() * 4)
+    ],
     customer_email_subject: `Test Email ${i + 1}`,
   }));
 
@@ -101,7 +103,7 @@ describe('Dashboard Component', () => {
 
   test('renders dashboard header', async () => {
     render(<Dashboard />);
-    
+
     // Wait for components to load
     await waitFor(() => {
       expect(screen.getByText(/dashboard/i)).toBeInTheDocument();
@@ -110,7 +112,7 @@ describe('Dashboard Component', () => {
 
   test('renders profile information when loaded', async () => {
     render(<Dashboard />);
-    
+
     await waitFor(() => {
       expect(screen.getByText(/test business/i)).toBeInTheDocument();
       expect(screen.getByText(/test description/i)).toBeInTheDocument();
@@ -119,7 +121,7 @@ describe('Dashboard Component', () => {
 
   test('renders usage statistics', async () => {
     render(<Dashboard />);
-    
+
     await waitFor(() => {
       expect(screen.getByText(/responses used/i)).toBeInTheDocument();
       expect(screen.getByText(/25\/100/i)).toBeInTheDocument(); // 25 used out of 100 limit
@@ -128,12 +130,12 @@ describe('Dashboard Component', () => {
 
   test('renders charts', async () => {
     render(<Dashboard />);
-    
+
     await waitFor(() => {
       expect(screen.getByText(/email activity/i)).toBeInTheDocument();
       expect(screen.getByText(/tone distribution/i)).toBeInTheDocument();
       expect(screen.getByText(/response time/i)).toBeInTheDocument();
-      
+
       // Check if chart containers are rendered
       expect(screen.getAllByTestId('responsive-container').length).toBeGreaterThan(0);
     });
@@ -145,7 +147,7 @@ describe('Dashboard Component', () => {
       data: null,
       error: { message: 'Error loading profile' },
     });
-    
+
     // Override the from implementation just for this test
     supabase.from.mockImplementationOnce((tableName) => {
       if (tableName === 'profiles') {
@@ -165,12 +167,12 @@ describe('Dashboard Component', () => {
         }),
       };
     });
-    
+
     render(<Dashboard />);
-    
+
     // Should display error message or fall back to mock data
     await waitFor(() => {
       expect(screen.getByText(/mock data/i)).toBeInTheDocument();
     });
   });
-}); 
+});

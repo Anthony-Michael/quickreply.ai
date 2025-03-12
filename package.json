@@ -17,6 +17,8 @@
     "micro": "^10.0.1",
     "next": "^15.2.1",
     "node-fetch": "^3.3.2",
+    "nodemailer": "^6.10.0",
+    "openai": "^4.87.3",
     "prop-types": "^15.8.1",
     "react": "^18.2.0",
     "react-chartjs-2": "^5.2.0",

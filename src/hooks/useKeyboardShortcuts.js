@@ -2,16 +2,16 @@ import { useEffect } from 'react';
 
 /**
  * Custom hook for handling keyboard shortcuts
- * 
+ *
  * This hook registers global keyboard shortcuts and runs the associated callbacks
  * when the shortcut is triggered.
- * 
+ *
  * @param {Object} shortcuts - Object mapping keyboard shortcuts to callback functions
  * @param {Object} options - Options for configuring shortcut behavior
  * @param {boolean} options.enabled - Whether shortcuts are enabled
  * @param {Array<string>} options.excludedTargets - Array of element selectors to exclude
  * @returns {void}
- * 
+ *
  * @example
  * // Usage example
  * useKeyboardShortcuts({
@@ -20,7 +20,7 @@ import { useEffect } from 'react';
  *   'escape': () => resetForm(),
  * });
  */
-const useKeyboardShortcuts = (
+export const useKeyboardShortcuts = (
   shortcuts = {},
   { enabled = true, excludedTargets = ['input[type="text"]', 'textarea'] } = {}
 ) => {
@@ -30,9 +30,7 @@ const useKeyboardShortcuts = (
     const handleKeyDown = (event) => {
       // Don't trigger shortcuts when typing in input fields or textareas
       if (
-        excludedTargets.some((selector) =>
-          event.target.matches(selector)
-        ) &&
+        excludedTargets.some((selector) => event.target.matches(selector)) &&
         !event.target.hasAttribute('data-shortcut-enabled')
       ) {
         return;
@@ -65,5 +63,3 @@ const useKeyboardShortcuts = (
     };
   }, [shortcuts, enabled, excludedTargets]);
 };
-
-export default useKeyboardShortcuts; 

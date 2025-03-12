@@ -2,12 +2,12 @@ import { useState, useEffect } from 'react';
 
 /**
  * Custom hook for debouncing a value
- * 
+ *
  * This hook helps improve performance by delaying the update of a value
  * until a specified delay has passed since the last change.
  * Useful for input fields, search queries, and other scenarios where
  * frequent updates might cause performance issues.
- * 
+ *
  * @param {any} value - The value to debounce
  * @param {number} delay - The delay in milliseconds
  * @returns {any} The debounced value
@@ -31,4 +31,4 @@ const useDebounce = (value, delay = 500) => {
   return debouncedValue;
 };
 
-export default useDebounce; 
+export default useDebounce;

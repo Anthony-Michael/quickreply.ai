@@ -69,7 +69,7 @@ describe('SubscriptionManagement Component', () => {
 
   test('renders subscription management page', async () => {
     render(<SubscriptionManagement />);
-    
+
     await waitFor(() => {
       expect(screen.getByText(/subscription management/i)).toBeInTheDocument();
     });
@@ -77,7 +77,7 @@ describe('SubscriptionManagement Component', () => {
 
   test('displays current subscription details', async () => {
     render(<SubscriptionManagement />);
-    
+
     await waitFor(() => {
       expect(screen.getByText(/current plan/i)).toBeInTheDocument();
       expect(screen.getByText(/pro/i)).toBeInTheDocument();
@@ -87,7 +87,7 @@ describe('SubscriptionManagement Component', () => {
 
   test('displays available plans', async () => {
     render(<SubscriptionManagement />);
-    
+
     await waitFor(() => {
       expect(screen.getByText(/available plans/i)).toBeInTheDocument();
       expect(screen.getAllByText(/free/i).length).toBeGreaterThan(0);
@@ -98,7 +98,7 @@ describe('SubscriptionManagement Component', () => {
 
   test('handles plan upgrade click', async () => {
     render(<SubscriptionManagement />);
-    
+
     await waitFor(() => {
       expect(screen.getByText(/available plans/i)).toBeInTheDocument();
     });
@@ -106,7 +106,7 @@ describe('SubscriptionManagement Component', () => {
     // Find and click a plan upgrade button
     const upgradeButtons = screen.getAllByText(/upgrade/i);
     fireEvent.click(upgradeButtons[0]);
-    
+
     // Should show alert in mock environment
     await waitFor(() => {
       expect(window.alert).toHaveBeenCalled();
@@ -115,7 +115,7 @@ describe('SubscriptionManagement Component', () => {
 
   test('displays FAQ section', async () => {
     render(<SubscriptionManagement />);
-    
+
     await waitFor(() => {
       expect(screen.getByText(/frequently asked questions/i)).toBeInTheDocument();
       expect(screen.getByText(/how do i upgrade my plan/i)).toBeInTheDocument();
@@ -129,7 +129,7 @@ describe('SubscriptionManagement Component', () => {
       data: null,
       error: { message: 'Error loading profile' },
     });
-    
+
     // Override the from implementation just for this test
     supabase.from.mockImplementationOnce((tableName) => {
       if (tableName === 'profiles') {
@@ -141,12 +141,12 @@ describe('SubscriptionManagement Component', () => {
       }
       return {};
     });
-    
+
     render(<SubscriptionManagement />);
-    
+
     // Should display error message
     await waitFor(() => {
       expect(screen.getByText(/error loading profile/i)).toBeInTheDocument();
     });
   });
-}); 
+});

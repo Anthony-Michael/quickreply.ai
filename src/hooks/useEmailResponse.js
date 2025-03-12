@@ -4,33 +4,33 @@ import { generateEmailResponse } from '../lib/openai';
 
 /**
  * Custom hook for managing email response generation
- * 
+ *
  * This hook encapsulates the state and logic for generating email responses,
  * making the component that uses it more focused on rendering and user interaction.
- * 
+ *
  * @returns {Object} State values and functions for email response generation
  */
-const useEmailResponse = () => {
+export const useEmailResponse = () => {
   // State for input fields
   const [customerEmail, setCustomerEmail] = useState('');
   const [businessContext, setBusinessContext] = useState('');
   const [tone, setTone] = useState('professional');
-  
+
   // State for generated response
   const [generatedResponse, setGeneratedResponse] = useState('');
   const [editedResponse, setEditedResponse] = useState('');
-  
+
   // State for generation process
   const [isGenerating, setIsGenerating] = useState(false);
   const [error, setError] = useState(null);
-  
+
   // Get user and Supabase client
   const user = useUser();
   const supabase = useSupabaseClient();
-  
+
   /**
    * Generates an email response based on the provided inputs
-   * 
+   *
    * @returns {Promise<void>}
    */
   const generateResponse = async () => {
@@ -39,23 +39,19 @@ const useEmailResponse = () => {
       setError('Please enter a customer email');
       return;
     }
-    
+
     // Reset state
     setError(null);
     setIsGenerating(true);
-    
+
     try {
       // Generate response
-      const response = await generateEmailResponse(
-        customerEmail,
-        businessContext,
-        tone
-      );
-      
+      const response = await generateEmailResponse(customerEmail, businessContext, tone);
+
       // Update state with generated response
       setGeneratedResponse(response);
       setEditedResponse(response);
-      
+
       // Save to history if user is authenticated
       if (user && supabase) {
         try {
@@ -67,7 +63,7 @@ const useEmailResponse = () => {
             generated_response: response,
             final_response: response,
           });
-          
+
           if (dbError) {
             console.error('Error saving response to history:', dbError);
           }
@@ -82,24 +78,24 @@ const useEmailResponse = () => {
       setIsGenerating(false);
     }
   };
-  
+
   /**
    * Saves the edited response to the database
-   * 
+   *
    * @returns {Promise<void>}
    */
   const saveResponse = async () => {
     if (!user || !supabase || !generatedResponse) {
       return;
     }
-    
+
     try {
       const { error: dbError } = await supabase
         .from('email_responses')
         .update({ final_response: editedResponse })
         .eq('user_id', user.id)
         .eq('generated_response', generatedResponse);
-      
+
       if (dbError) {
         console.error('Error updating response:', dbError);
         setError('Failed to save response. Please try again.');
@@ -109,7 +105,7 @@ const useEmailResponse = () => {
       setError('Failed to save response. Please try again.');
     }
   };
-  
+
   /**
    * Resets all state values
    */
@@ -121,7 +117,7 @@ const useEmailResponse = () => {
     setEditedResponse('');
     setError(null);
   };
-  
+
   return {
     // State
     customerEmail,
@@ -136,12 +132,10 @@ const useEmailResponse = () => {
     setEditedResponse,
     isGenerating,
     error,
-    
+
     // Functions
     generateResponse,
     saveResponse,
     resetAll,
   };
 };
-
-export default useEmailResponse; 
