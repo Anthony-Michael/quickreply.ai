@@ -1,5 +1,6 @@
 import Stripe from 'stripe';
 import { supabaseAdmin, authenticateRequest } from './utils/supabase-admin';
+import withRedisRateLimit from './middleware/redis-rate-limit';
 
 // Initialize Stripe with the secret key
 if (!process.env.STRIPE_SECRET_KEY) {
@@ -15,11 +16,11 @@ const stripe = process.env.STRIPE_SECRET_KEY
 // Define the price IDs for each subscription tier
 // These should be set as environment variables and match your Stripe dashboard
 const PRICE_IDS = {
-  pro: process.env.STRIPE_PRICE_PRO || 'price_proXXXXXXX',         // Replace with actual price ID 
-  business: process.env.STRIPE_PRICE_BUSINESS || 'price_businessXXXXXXX', // Replace with actual price ID
+  pro: process.env.STRIPE_PRICE_PRO,
+  business: process.env.STRIPE_PRICE_BUSINESS,
 };
 
-export default async function handler(req, res) {
+async function handler(req, res) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
   }
@@ -110,4 +111,33 @@ export default async function handler(req, res) {
       details: error.message
     });
   }
-} 
+}
+
+// Apply Redis rate limiting to the handler with custom options
+export default withRedisRateLimit(handler, {
+  // Use custom key generator - include user ID when available for more accurate limits
+  keyGenerator: (req) => {
+    try {
+      // Get JWT token from authorization header
+      const token = req.headers.authorization?.split(' ')[1];
+      if (token) {
+        // Extract user ID from token if possible
+        // This is a simplified example - you might need proper JWT decoding
+        const base64Url = token.split('.')[1];
+        const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+        const payload = JSON.parse(Buffer.from(base64, 'base64').toString());
+        if (payload.sub) {
+          return `user:${payload.sub}`;
+        }
+      }
+    } catch (error) {
+      // Fallback to IP address on error
+      console.error('Error extracting user ID for rate limiting:', error);
+    }
+
+    // Default to IP address
+    return req.headers['x-forwarded-for'] || 
+           req.socket.remoteAddress || 
+           'unknown';
+  }
+}); 

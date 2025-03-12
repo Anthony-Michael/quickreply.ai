@@ -1,7 +1,8 @@
 import Stripe from 'stripe';
 import { createClient } from '@supabase/supabase-js';
+import withRateLimit from './middleware/rate-limit';
 
-export default async function handler(req, res) {
+async function handler(req, res) {
   if (req.method !== 'GET') {
     return res.status(405).json({ message: 'Method not allowed' });
   }
@@ -81,4 +82,7 @@ export default async function handler(req, res) {
     stripe: stripeStatus,
     supabase: supabaseStatus,
   });
-} 
+}
+
+// Apply rate limiting to the handler
+export default withRateLimit(handler); 

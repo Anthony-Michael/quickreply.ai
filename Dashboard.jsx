@@ -5,7 +5,7 @@ import { LineChart, BarChart, PieChart } from 'your-chart-library'; // Replace w
 const Dashboard = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [stats, setStats] = useState({
+  const [userStats, setUserStats] = useState({
     totalEmails: 0,
     emailsThisMonth: 0,
     responseRate: 0,
@@ -15,6 +15,7 @@ const Dashboard = () => {
   });
   const [recentEmails, setRecentEmails] = useState([]);
   const [userProfile, setUserProfile] = useState(null);
+  const [userId, setUserId] = useState(null);
 
   useEffect(() => {
     async function loadDashboardData() {
@@ -144,7 +145,7 @@ const Dashboard = () => {
         const responseRate = totalEmails > 0 ? (editedCount / totalEmails) * 100 : 0;
         
         // Update stats state
-        setStats({
+        setUserStats({
           totalEmails,
           emailsThisMonth,
           responseRate: responseRate.toFixed(1),
@@ -152,6 +153,8 @@ const Dashboard = () => {
           usageByDay,
           toneDistribution
         });
+        
+        setUserId(user.id);
         
       } catch (err) {
         console.error('Error loading dashboard data:', err);
@@ -162,7 +165,7 @@ const Dashboard = () => {
     }
     
     loadDashboardData();
-  }, []);
+  }, [userId]);
 
   if (loading) {
     return <div className="p-8 text-center">Loading dashboard data...</div>;
@@ -180,23 +183,23 @@ const Dashboard = () => {
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
         <div className="bg-white p-6 rounded-lg shadow">
           <h3 className="text-gray-500 text-sm font-medium">Total Emails</h3>
-          <p className="text-3xl font-bold">{stats.totalEmails}</p>
+          <p className="text-3xl font-bold">{userStats.totalEmails}</p>
         </div>
         
         <div className="bg-white p-6 rounded-lg shadow">
           <h3 className="text-gray-500 text-sm font-medium">Emails This Month</h3>
-          <p className="text-3xl font-bold">{stats.emailsThisMonth}</p>
+          <p className="text-3xl font-bold">{userStats.emailsThisMonth}</p>
         </div>
         
         <div className="bg-white p-6 rounded-lg shadow">
           <h3 className="text-gray-500 text-sm font-medium">Edit Rate</h3>
-          <p className="text-3xl font-bold">{stats.responseRate}%</p>
+          <p className="text-3xl font-bold">{userStats.responseRate}%</p>
           <p className="text-sm text-gray-500">of responses were edited</p>
         </div>
         
         <div className="bg-white p-6 rounded-lg shadow">
           <h3 className="text-gray-500 text-sm font-medium">Remaining Quota</h3>
-          <p className="text-3xl font-bold">{stats.remainingQuota}</p>
+          <p className="text-3xl font-bold">{userStats.remainingQuota}</p>
           <p className="text-sm text-gray-500">
             of {userProfile?.monthly_responses_limit} responses
           </p>
@@ -209,7 +212,7 @@ const Dashboard = () => {
           <h3 className="text-lg font-medium mb-4">Email Activity (Last 7 Days)</h3>
           <div className="h-64">
             <LineChart
-              data={stats.usageByDay}
+              data={userStats.usageByDay}
               xKey="date"
               yKey="count"
               color="#4F46E5"
@@ -221,7 +224,7 @@ const Dashboard = () => {
           <h3 className="text-lg font-medium mb-4">Response Tone Distribution</h3>
           <div className="h-64">
             <PieChart
-              data={stats.toneDistribution}
+              data={userStats.toneDistribution}
               nameKey="tone"
               valueKey="count"
               colors={['#4F46E5', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6']}

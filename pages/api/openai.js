@@ -1,5 +1,16 @@
+import OpenAI from 'openai';
 import { supabaseAdmin, authenticateRequest } from './utils/supabase-admin';
 import { corsMiddleware } from './cors-middleware';
+import { cacheOrFetch, invalidateCache } from './utils/redis-client';
+
+// Initialize OpenAI API client
+const openai = new OpenAI({
+  apiKey: process.env.OPENAI_API_KEY,
+});
+
+// Define cache keys
+const USER_PROFILE_CACHE_KEY = userId => `user:profile:${userId}`;
+const USER_USAGE_CACHE_KEY = userId => `user:usage:${userId}`;
 
 // Mock response generator for development use
 function generateMockResponse(customerEmail, businessName, tone) {
@@ -127,51 +138,56 @@ async function makeOpenAIRequest(prompt, maxRetries = 3) {
  * @returns {Object} - Result of the check with user profile data
  */
 async function checkUserUsageLimits(userId) {
-  // Run reset_monthly_usage() function if needed for users at the beginning of billing cycle
-  // This executes the function in Supabase to reset usage counts for eligible users
-  await supabaseAdmin.rpc('reset_monthly_usage');
-  
-  // Fetch current user profile with usage information
-  const { data: userProfile, error: profileError } = await supabaseAdmin
-    .from('profiles')
-    .select('id, subscription_tier, monthly_responses_used, monthly_responses_limit, business_name, business_description, subscription_end_date')
-    .eq('id', userId)
-    .single();
+  // Use caching function to avoid repeated database calls
+  const checkUsage = async () => {
+    // Run reset_monthly_usage() function if needed for users at the beginning of billing cycle
+    await supabaseAdmin.rpc('reset_monthly_usage');
     
-  if (profileError) {
-    console.error('Error fetching user profile:', profileError);
-    throw new Error('Could not verify usage limits');
-  }
-  
-  // Check if user has reached their monthly limit
-  if (userProfile.monthly_responses_used >= userProfile.monthly_responses_limit) {
+    // Fetch current user profile with usage information
+    const { data: userProfile, error: profileError } = await supabaseAdmin
+      .from('profiles')
+      .select('id, subscription_tier, monthly_responses_used, monthly_responses_limit, business_name, business_description, subscription_end_date')
+      .eq('id', userId)
+      .single();
+      
+    if (profileError) {
+      console.error('Error fetching user profile:', profileError);
+      throw new Error('Could not verify usage limits');
+    }
+    
+    // Check if user has reached their monthly limit
+    if (userProfile.monthly_responses_used >= userProfile.monthly_responses_limit) {
+      return {
+        limitReached: true,
+        profile: userProfile,
+        error: {
+          message: 'You have reached your AI response limit. Upgrade your plan for more responses.',
+          code: 'MONTHLY_LIMIT_REACHED'
+        }
+      };
+    }
+    
+    // Check if subscription has expired
+    if (userProfile.subscription_end_date && new Date(userProfile.subscription_end_date) < new Date()) {
+      return {
+        limitReached: true,
+        profile: userProfile,
+        error: {
+          message: 'Your subscription has expired. Please renew your plan to continue using AI responses.',
+          code: 'SUBSCRIPTION_EXPIRED'
+        }
+      };
+    }
+    
+    // User has available responses
     return {
-      limitReached: true,
-      profile: userProfile,
-      error: {
-        message: 'You have reached your AI response limit. Upgrade your plan for more responses.',
-        code: 'MONTHLY_LIMIT_REACHED'
-      }
+      limitReached: false,
+      profile: userProfile
     };
-  }
-  
-  // Check if subscription has expired
-  if (userProfile.subscription_end_date && new Date(userProfile.subscription_end_date) < new Date()) {
-    return {
-      limitReached: true,
-      profile: userProfile,
-      error: {
-        message: 'Your subscription has expired. Please renew your plan to continue using AI responses.',
-        code: 'SUBSCRIPTION_EXPIRED'
-      }
-    };
-  }
-  
-  // User has available responses
-  return {
-    limitReached: false,
-    profile: userProfile
   };
+  
+  // Cache user usage checks for 2 minutes
+  return await cacheOrFetch(USER_USAGE_CACHE_KEY(userId), checkUsage, 120);
 }
 
 /**
@@ -204,7 +220,6 @@ export async function callOpenAiApi(prompt, options = {}) {
 
 // Convert the default export to a named handler that can be wrapped with CORS middleware
 const openaiHandler = async (req, res) => {
-  // Only accept POST requests
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
   }
@@ -217,120 +232,64 @@ const openaiHandler = async (req, res) => {
       return res.status(401).json({ error: authError });
     }
 
-    // Extract request parameters
-    const { customerEmail, businessContext, tone = 'professional' } = req.body;
-
+    // Extract the params from the request body
+    const { customerEmail, context, tone, model = 'gpt-3.5-turbo' } = req.body;
+    
     if (!customerEmail) {
       return res.status(400).json({ error: 'Customer email is required' });
     }
 
-    // Check if user has remaining credits BEFORE making the OpenAI request
-    const usageCheck = await checkUserUsageLimits(user.id);
+    // Check user usage limits
+    const { limitReached, profile, error: usageError } = await checkUserUsageLimits(user.id);
     
-    if (usageCheck.limitReached) {
-      return res.status(403).json({ 
-        error: usageCheck.error.message,
-        errorCode: usageCheck.error.code,
-        currentUsage: usageCheck.profile.monthly_responses_used,
-        limit: usageCheck.profile.monthly_responses_limit,
-        tier: usageCheck.profile.subscription_tier
+    if (usageError) {
+      return res.status(402).json({ error: usageError.message, code: usageError.code });
+    }
+    
+    if (limitReached) {
+      return res.status(402).json({ 
+        error: 'Usage limit reached', 
+        subscription: profile.subscription_tier,
+        usageLimit: profile.monthly_responses_limit,
+        usageCount: profile.monthly_responses_used,
+        code: 'USAGE_LIMIT_REACHED'
       });
     }
 
-    // Extract key information from the customer email
-    const emailSubject = extractSubject(customerEmail);
-    const customerName = extractCustomerName(customerEmail);
-    const emailBody = extractEmailBody(customerEmail);
+    // Generate the email response
+    const startTime = Date.now();
+    const response = await generateEmailResponse(customerEmail, context, tone, model);
+    const endTime = Date.now();
+    const responseTime = endTime - startTime;
 
-    // Get business details for personalization
-    const businessName = usageCheck.profile.business_name || 'Our Company';
-    const businessDescription = usageCheck.profile.business_description || 'A business committed to excellent customer service';
+    // Increment the user's usage count
+    await incrementUserResponseCount(user.id, profile.monthly_responses_used || 0);
+    
+    // Invalidate the user profile and usage cache
+    await invalidateCache(USER_PROFILE_CACHE_KEY(user.id));
+    await invalidateCache(USER_USAGE_CACHE_KEY(user.id));
 
-    // Prepare the prompt for OpenAI
-    const prompt = `
-      You are a knowledgeable customer service representative for ${businessName}.
-      
-      BUSINESS INFORMATION:
-      - Company name: ${businessName}
-      - Business description: ${businessDescription}
-      - Additional context: ${businessContext || 'No additional context provided'}
-      
-      STYLE GUIDELINES:
-      - Tone: ${tone} 
-      - Match your writing style to reflect the business description
-      - Use language that aligns with ${businessName}'s brand and values
-      - If the business sounds formal in their description, maintain that formality
-      - If the business sounds casual or friendly, adopt a similar approachable style
-      
-      CUSTOMER EMAIL:
-      Subject: ${emailSubject}
-      From: ${customerName}
-      Body:
-      ${emailBody}
-      
-      RESPONSE INSTRUCTIONS:
-      1. Address the customer by name if available
-      2. Reference their specific inquiry or issue
-      3. Provide helpful, accurate information that directly addresses their needs
-      4. If you need more details to resolve their issue, politely request the specific information needed
-      5. Include next steps or follow-up information when appropriate
-      6. Sign the email as "${businessName} Support Team" at the end
-      7. Keep the response concise yet thorough
-      
-      Write a complete, professional email response maintaining ${businessName}'s brand voice.
-    `;
+    // Store the generated response in the database
+    await storeEmailResponse(
+      user.id,
+      customerEmail,
+      response,
+      context,
+      tone,
+      responseTime
+    );
 
-    try {
-      // Increment the usage count BEFORE making the API request to prevent exceeding limits
-      await incrementUserResponseCount(user.id, usageCheck.profile.monthly_responses_used);
-      
-      // Start timing the request
-      const startTime = Date.now();
-      
-      // Make the OpenAI request with retry logic
-      const generatedResponse = await makeOpenAIRequest(prompt, 3);
-
-      // Log the generation in the history
-      await supabaseAdmin.from('email_history').insert({
-        user_id: user.id,
-        customer_email: customerEmail,
-        generated_response: generatedResponse,
-        context_provided: businessContext,
-        tone_requested: tone,
-        business_name_used: businessName,
-        response_time_ms: Date.now() - startTime
-      });
-
-      // Return the generated response
-      return res.status(200).json({ 
-        response: generatedResponse,
-        businessName: businessName, // Return the business name for frontend use
-        currentUsage: usageCheck.profile.monthly_responses_used + 1,
-        limit: usageCheck.profile.monthly_responses_limit
-      });
-    } catch (apiError) {
-      // If API call fails, we should revert the usage increment to not charge the user
-      try {
-        await supabaseAdmin
-          .from('profiles')
-          .update({
-            monthly_responses_used: usageCheck.profile.monthly_responses_used, // Revert to original value
-            updated_at: new Date().toISOString()
-          })
-          .eq('id', user.id);
-      } catch (revertError) {
-        console.error('Failed to revert usage count:', revertError);
+    return res.status(200).json({
+      response,
+      usage: {
+        count: profile.monthly_responses_used + 1,
+        limit: profile.monthly_responses_limit,
+        subscription: profile.subscription_tier
       }
-      
-      console.error('OpenAI API error after retries:', apiError);
-      return res.status(503).json({ 
-        error: 'Failed to generate response after multiple attempts. Please try again later.',
-        details: apiError.message
-      });
-    }
+    });
   } catch (error) {
-    console.error('Error in request processing:', error);
-    return res.status(500).json({ error: 'Failed to process request. Please try again later.' });
+    console.error('Error generating response:', error);
+    return res.status(500).json({ error: 'Failed to generate response' });
   }
 };
 
@@ -360,4 +319,81 @@ function extractEmailBody(email) {
   }
   
   return lines.slice(bodyStartIndex).join('\n').trim();
+}
+
+/**
+ * Generates an email response using OpenAI
+ * @param {string} customerEmail - The customer's email to respond to
+ * @param {string} context - Additional context for the response
+ * @param {string} tone - The desired tone of the response
+ * @param {string} model - The OpenAI model to use
+ * @returns {string} - The generated email response
+ */
+async function generateEmailResponse(customerEmail, context = '', tone = 'professional', model = 'gpt-3.5-turbo') {
+  // Retry logic with exponential backoff
+  const maxRetries = 3;
+  let lastError = null;
+  
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      const messages = [
+        {
+          role: 'system',
+          content: `You are an email assistant helping to craft professional responses to customer emails. ${
+            tone ? `Please write in a ${tone} tone.` : ''
+          } ${context ? `Additional context: ${context}` : ''}`
+        },
+        {
+          role: 'user',
+          content: `Please help me respond to this email from a customer: "${customerEmail}"`
+        }
+      ];
+      
+      const response = await openai.chat.completions.create({
+        model,
+        messages,
+        temperature: 0.7,
+        max_tokens: 1000,
+      });
+      
+      return response.choices[0].message.content.trim();
+    } catch (error) {
+      console.error(`OpenAI API error (attempt ${attempt}/${maxRetries}):`, error);
+      lastError = error;
+      
+      // Exponential backoff
+      if (attempt < maxRetries) {
+        const backoffMs = Math.pow(2, attempt) * 100;
+        await new Promise(resolve => setTimeout(resolve, backoffMs));
+      }
+    }
+  }
+  
+  // If we get here with lastError, all retries failed
+  throw lastError || new Error('Failed to generate response after multiple attempts');
+}
+
+/**
+ * Stores the email response in the database
+ * @param {string} userId - The user's ID
+ * @param {string} customerEmail - The customer's email
+ * @param {string} response - The generated response
+ * @param {string} context - Additional context used
+ * @param {string} tone - The tone that was requested
+ * @param {number} responseTime - Time taken to generate the response in ms
+ */
+async function storeEmailResponse(userId, customerEmail, response, context, tone, responseTime) {
+  try {
+    await supabaseAdmin.from('email_history').insert({
+      user_id: userId,
+      customer_email: customerEmail,
+      generated_response: response,
+      context_provided: context || null,
+      tone_requested: tone || null,
+      response_time_ms: responseTime
+    });
+  } catch (error) {
+    // Log but don't throw - we don't want to fail the request if storage fails
+    console.error('Error storing email response:', error);
+  }
 } 

@@ -2,6 +2,15 @@ import Stripe from 'stripe';
 import { buffer } from 'micro';
 import { supabaseAdmin } from './utils/supabase-admin';
 import { corsMiddleware } from './cors-middleware';
+import { withRedisRateLimit, rateLimiter } from './middleware/redis-rate-limit';
+
+// Custom rate limiter for webhooks with higher limits
+const webhookRateLimiter = new rateLimiter.constructor({
+  windowMs: 5 * 60 * 1000, // 5 minutes
+  maxRequests: 1000, // 1000 requests per window (much higher for webhooks)
+  prefix: 'ratelimit:webhook:', // Different prefix for webhooks
+  fallbackToMemory: true, // Use in-memory fallback if Redis is unavailable
+});
 
 // Initialize Stripe with the secret key
 if (!process.env.STRIPE_SECRET_KEY) {
@@ -30,8 +39,8 @@ const TIER_TO_LIMIT = {
 
 // Mapping of product IDs to subscription tiers (replace with your actual product IDs)
 const PRODUCT_TO_TIER = {
-  'prod_businessXXXXXXX': 'business',
-  'prod_premiumXXXXXXX': 'premium',
+  [process.env.STRIPE_PRODUCT_BUSINESS]: 'business',
+  [process.env.STRIPE_PRODUCT_PREMIUM]: 'premium',
 };
 
 // Hourly request limits for rate limiting based on subscription tier
@@ -285,8 +294,39 @@ const stripeWebhookHandler = async (req, res) => {
   }
 };
 
-// Export the wrapped handler with CORS middleware
-export default corsMiddleware(stripeWebhookHandler);
+// Custom rate limiting middleware specifically for webhooks
+function withWebhookRateLimit(handler) {
+  return async (req, res) => {
+    // Use Stripe signature or endpoint as the rate limit key
+    const key = req.headers['stripe-signature'] || 
+                req.url || 
+                'webhook';
+    
+    // Apply custom webhook rate limiting
+    const result = await webhookRateLimiter.limit(key);
+    
+    // Set rate limit headers
+    res.setHeader('X-RateLimit-Limit', webhookRateLimiter.maxRequests);
+    res.setHeader('X-RateLimit-Remaining', result.remainingRequests);
+    res.setHeader('X-RateLimit-Reset', Math.ceil(result.resetTime / 1000));
+    
+    // Only rate limit in extreme cases
+    if (result.isRateLimited) {
+      console.warn(`Webhook rate limited: ${key}`);
+      return res.status(429).json({
+        error: 'Too Many Webhook Requests',
+        message: 'Webhook rate limit exceeded. Please reduce frequency of webhook calls.',
+        retryAfter: Math.ceil((result.resetTime - Date.now()) / 1000)
+      });
+    }
+    
+    // Continue to the webhook handler
+    return handler(req, res);
+  };
+}
+
+// For webhooks, we want to apply CORS middleware first, then custom rate limiting
+export default corsMiddleware(withWebhookRateLimit(stripeWebhookHandler));
 
 /**
  * Updates a user's subscription details in Supabase

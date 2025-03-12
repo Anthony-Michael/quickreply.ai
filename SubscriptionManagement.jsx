@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 import { loadStripe } from '@stripe/stripe-js';
+import { updateSubscription } from './stripeService';
 
 // Initialize Stripe (you would replace this with your actual publishable key)
 const stripePromise = loadStripe(process.env.REACT_APP_STRIPE_PUBLISHABLE_KEY);
@@ -128,6 +129,18 @@ const SubscriptionManagement = () => {
       setError('Failed to process subscription upgrade. Please try again later.');
     } finally {
       setProcessingUpgrade(false);
+    }
+  };
+
+  const handleSubscriptionUpdate = async () => {
+    setIsLoading(true);
+    try {
+      await updateSubscription(userId, newPlan);
+      alert('Subscription updated successfully!');
+    } catch (error) {
+      alert('Error updating subscription: ' + error.message);
+    } finally {
+      setIsLoading(false);
     }
   };
 

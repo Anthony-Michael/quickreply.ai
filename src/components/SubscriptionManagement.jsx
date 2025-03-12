@@ -1,6 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { useUser, useSupabaseClient } from '@supabase/auth-helpers-react';
 import { loadStripe } from '@stripe/stripe-js';
+import { useUserProfile, useSubscriptionData } from '../lib/react-query';
 
 // Initialize Stripe with the publishable key - using conditional to handle SSR
 const stripePromise = typeof window !== 'undefined' ? 
@@ -15,6 +16,51 @@ if (typeof window !== 'undefined') {
   }
 }
 
+const PlanCard = ({ title, price, features, isRecommended, buttonText, onClick, isLoading, disabled }) => (
+  <div className={`relative bg-white rounded-lg shadow-md p-6 ${isRecommended ? 'border-2 border-blue-500' : ''}`}>
+    {isRecommended && (
+      <span className="absolute top-0 left-1/2 transform -translate-x-1/2 -translate-y-1/2 bg-blue-500 text-white px-4 py-1 rounded-full text-sm font-bold">
+        Recommended
+      </span>
+    )}
+    <h3 className="text-xl font-bold mb-2">{title}</h3>
+    <p className="text-3xl font-bold mb-4">${price}<span className="text-sm text-gray-600">/month</span></p>
+    <ul className="mb-6 space-y-2">
+      {features.map((feature, index) => (
+        <li key={index} className="flex items-start">
+          <svg className="h-5 w-5 text-green-500 mr-2 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7"></path>
+          </svg>
+          {feature}
+        </li>
+      ))}
+    </ul>
+    <button
+      onClick={onClick}
+      disabled={disabled || isLoading}
+      className={`w-full py-2 px-4 rounded-md font-medium transition-colors ${
+        disabled
+          ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+          : isRecommended
+          ? 'bg-blue-600 text-white hover:bg-blue-700'
+          : 'bg-blue-500 text-white hover:bg-blue-600'
+      }`}
+    >
+      {isLoading ? (
+        <span className="flex items-center justify-center">
+          <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+          </svg>
+          Processing...
+        </span>
+      ) : (
+        buttonText
+      )}
+    </button>
+  </div>
+);
+
 const SubscriptionManagement = () => {
   const user = useUser();
   const supabase = useSupabaseClient();
@@ -24,6 +70,8 @@ const SubscriptionManagement = () => {
   const [currentPlan, setCurrentPlan] = useState('');
   const [subscriptionEnd, setSubscriptionEnd] = useState(null);
   const [processingUpgrade, setProcessingUpgrade] = useState(false);
+  const [checkoutLoading, setCheckoutLoading] = useState(false);
+  const [selectedPlan, setSelectedPlan] = useState(null);
 
   // Plan details
   const planDetails = {
@@ -46,6 +94,16 @@ const SubscriptionManagement = () => {
       features: ['Enterprise-grade responses', 'Instant response time', 'Dedicated support', 'Team management', 'Custom branding']
     },
   };
+
+  // Get user profile and subscription data using React Query
+  const { data: userProfileData, isLoading: profileLoading } = useUserProfile();
+  const { data: subscriptionData, isLoading: subscriptionLoading } = useSubscriptionData();
+  
+  // Determine current plan
+  const currentPlanData = subscriptionData?.plan || 'free';
+  
+  // Loading state
+  const isLoading = profileLoading || subscriptionLoading;
 
   useEffect(() => {
     // Only load subscription data when user is available
@@ -125,41 +183,41 @@ const SubscriptionManagement = () => {
     }
   }
 
-  const handleUpgradeSubscription = async planTier => {
-    if (planTier === currentPlan) {
-      return; // Already on this plan
-    }
+  // Initialize Stripe checkout
+  const handleSubscribe = async (planTier) => {
+    setSelectedPlan(planTier);
+    setCheckoutLoading(true);
+    setError('');
 
     try {
-      setProcessingUpgrade(true);
-      setError('');
-
-      // Add error handling for missing Stripe configuration
-      if (typeof window !== 'undefined' && !process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY) {
-        console.error('Stripe publishable key is missing');
-        setError('Payment processing is not properly configured. Please contact support.');
-        setProcessingUpgrade(false);
+      // Check if Stripe is properly initialized
+      if (!process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY) {
+        console.error('Stripe publishable key is not set.');
+        setError('Unable to process payment. Stripe is not configured.');
+        setCheckoutLoading(false);
         return;
       }
 
-      const session = await supabase.auth.getSession();
-      const accessToken = session?.data?.session?.access_token;
-      
-      if (!accessToken) {
-        throw new Error('Authentication required. Please sign in to continue.');
+      // Get the Stripe instance
+      const stripe = await stripePromise;
+      if (!stripe) {
+        throw new Error('Failed to initialize Stripe.');
       }
 
-      // Call our API to create a Stripe checkout session
+      // Get the current session for auth token
+      const { data: authData } = await supabase.auth.getSession();
+      
+      // Create a checkout session
       const response = await fetch('/api/create-checkout-session', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${accessToken}`
+          'Authorization': `Bearer ${authData.session?.access_token}`
         },
         body: JSON.stringify({
           planTier,
-          returnUrl: window.location.origin + '/subscription-management',
-        }),
+          returnUrl: window.location.origin
+        })
       });
 
       if (!response.ok) {
@@ -170,22 +228,16 @@ const SubscriptionManagement = () => {
       const { sessionId } = await response.json();
 
       // Redirect to Stripe checkout
-      const stripe = await stripePromise;
-      
-      if (!stripe) {
-        throw new Error('Could not initialize Stripe. Please check your configuration.');
-      }
-      
       const { error } = await stripe.redirectToCheckout({ sessionId });
-
+      
       if (error) {
         throw error;
       }
-    } catch (err) {
-      console.error('Error upgrading subscription:', err);
-      setError('Failed to process subscription upgrade. Please try again later.');
+    } catch (error) {
+      console.error('Error subscribing to plan:', error);
+      setError(error.message || 'Failed to process subscription. Please try again.');
     } finally {
-      setProcessingUpgrade(false);
+      setCheckoutLoading(false);
     }
   };
 
@@ -194,6 +246,52 @@ const SubscriptionManagement = () => {
 
     const options = { year: 'numeric', month: 'long', day: 'numeric' };
     return date.toLocaleDateString(undefined, options);
+  };
+
+  const renderPlanStatus = () => {
+    if (isLoading) {
+      return (
+        <div className="bg-gray-100 p-4 rounded-md mb-6">
+          <p className="text-center">Loading subscription data...</p>
+        </div>
+      );
+    }
+
+    if (currentPlanData === 'free') {
+      return (
+        <div className="bg-gray-100 p-4 rounded-md mb-6">
+          <p className="text-center">You are currently on the <span className="font-bold">Free Plan</span>.</p>
+          <p className="text-center text-sm text-gray-600 mt-1">Upgrade to access more features and increased limits.</p>
+        </div>
+      );
+    } else {
+      return (
+        <div className="bg-blue-50 p-4 rounded-md mb-6 border border-blue-200">
+          <p className="text-center">
+            You are currently on the <span className="font-bold capitalize">{currentPlanData} Plan</span>.
+          </p>
+          <p className="text-center text-sm text-gray-600 mt-1">
+            {subscriptionData?.subscriptionEndDate && (
+              <>Next billing date: {new Date(subscriptionData.subscriptionEndDate).toLocaleDateString()}</>
+            )}
+          </p>
+          <div className="mt-2 text-center">
+            <p className="text-sm">
+              <span className="font-semibold">{subscriptionData?.responsesUsed || 0}</span> of{' '}
+              <span className="font-semibold">{subscriptionData?.responseLimit || 0}</span> responses used this month
+            </p>
+            <div className="w-full bg-gray-200 rounded-full h-2.5 mt-2 mb-1">
+              <div 
+                className="bg-blue-600 h-2.5 rounded-full" 
+                style={{ 
+                  width: `${Math.min(((subscriptionData?.responsesUsed || 0) / (subscriptionData?.responseLimit || 1)) * 100, 100)}%` 
+                }}
+              ></div>
+            </div>
+          </div>
+        </div>
+      );
+    }
   };
 
   if (loading) {
@@ -213,132 +311,97 @@ const SubscriptionManagement = () => {
   }
 
   return (
-    <div className="max-w-6xl mx-auto p-6">
-      <h1 className="text-3xl font-bold mb-8">Subscription Management</h1>
+    <div className="container mx-auto px-4 py-8 max-w-6xl">
+      <h1 className="text-2xl font-bold mb-6">Subscription Plans</h1>
 
-      <div className="bg-white shadow-md rounded-lg p-6 mb-8">
-        <h2 className="text-2xl font-semibold mb-4">Current Plan</h2>
-        
-        <div className="flex flex-col md:flex-row md:items-center justify-between">
-          <div>
-            <p className="text-xl font-bold text-blue-600">
-              {planDetails[currentPlan]?.name || 'Free'} Plan
-            </p>
-            <p className="text-gray-600 mt-1">
-              {planDetails[currentPlan]?.responses || 0} responses per month
-            </p>
-            {subscriptionEnd && currentPlan !== 'free' && (
-              <p className="text-sm text-gray-500 mt-2">
-                Renews on {formatDate(subscriptionEnd)}
-              </p>
-            )}
-          </div>
-          
-          <div className="mt-4 md:mt-0">
-            <div className="p-4 bg-gray-50 rounded-lg">
-              <h3 className="font-semibold text-gray-800">Usage</h3>
-              <p className="text-2xl font-bold">
-                {userProfile?.monthly_responses_used || 0}/
-                {userProfile?.monthly_responses_limit || 0}
-              </p>
-              <p className="text-sm text-gray-600">responses used</p>
-            </div>
-          </div>
+      {/* Current plan info */}
+      {renderPlanStatus()}
+
+      {/* Error message */}
+      {error && (
+        <div className="bg-red-50 border border-red-200 text-red-700 p-4 rounded-md mb-6">
+          <p>{error}</p>
         </div>
+      )}
+
+      {/* Pricing cards */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+        {/* Free Plan */}
+        <PlanCard
+          title="Free"
+          price="0"
+          features={[
+            "25 AI email responses per month",
+            "Professional tone generation",
+            "Basic templates",
+            "Email history (last 30 days)"
+          ]}
+          buttonText={currentPlanData === 'free' ? 'Current Plan' : 'Downgrade'}
+          disabled={currentPlanData === 'free'}
+          onClick={() => {}}
+        />
+
+        {/* Pro Plan */}
+        <PlanCard
+          title="Business"
+          price="19"
+          isRecommended={true}
+          features={[
+            "250 AI email responses per month",
+            "Multiple tone options",
+            "Advanced templates",
+            "Email history (unlimited)",
+            "Priority support"
+          ]}
+          buttonText={currentPlanData === 'business' ? 'Current Plan' : 'Subscribe'}
+          isLoading={checkoutLoading && selectedPlan === 'business'}
+          disabled={currentPlanData === 'business'}
+          onClick={() => handleSubscribe('business')}
+        />
+
+        {/* Business Plan */}
+        <PlanCard
+          title="Premium"
+          price="49"
+          features={[
+            "1000 AI email responses per month",
+            "All tone options",
+            "Custom templates",
+            "Advanced analytics",
+            "24/7 priority support",
+            "API access"
+          ]}
+          buttonText={currentPlanData === 'premium' ? 'Current Plan' : 'Subscribe'}
+          isLoading={checkoutLoading && selectedPlan === 'premium'}
+          disabled={currentPlanData === 'premium'}
+          onClick={() => handleSubscribe('premium')}
+        />
       </div>
 
-      <div className="mb-12">
-        <h2 className="text-2xl font-semibold mb-6">Available Plans</h2>
-        
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          {Object.entries(planDetails).map(([tier, plan]) => (
-            <div key={tier} className="bg-white shadow-md rounded-lg overflow-hidden">
-              <div className={`p-6 ${currentPlan === tier ? 'bg-blue-50' : ''}`}>
-                <h3 className="text-xl font-bold">{plan.name}</h3>
-                <p className="text-3xl font-bold mt-2">
-                  ${plan.price}
-                  <span className="text-sm font-normal text-gray-600">/month</span>
-                </p>
-                <p className="mt-2 text-gray-600">{plan.responses} responses per month</p>
-                
-                <ul className="mt-4 space-y-2">
-                  {plan.features.map((feature, index) => (
-                    <li key={index} className="flex items-start">
-                      <svg
-                        className="h-5 w-5 text-green-500 mr-2 mt-0.5"
-                        fill="none"
-                        stroke="currentColor"
-                        viewBox="0 0 24 24"
-                      >
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          strokeWidth="2"
-                          d="M5 13l4 4L19 7"
-                        />
-                      </svg>
-                      {feature}
-                    </li>
-                  ))}
-                </ul>
-                
-                <div className="mt-6">
-                  {currentPlan === tier ? (
-                    <button
-                      className="w-full py-2 px-4 bg-gray-300 text-gray-700 rounded-md"
-                      disabled
-                    >
-                      Current Plan
-                    </button>
-                  ) : tier === 'free' ? (
-                    <button
-                      className="w-full py-2 px-4 bg-red-500 text-white rounded-md hover:bg-red-600"
-                      onClick={() => handleUpgradeSubscription(tier)}
-                      disabled={processingUpgrade}
-                    >
-                      Downgrade
-                    </button>
-                  ) : (
-                    <button
-                      className="w-full py-2 px-4 bg-blue-600 text-white rounded-md hover:bg-blue-700"
-                      onClick={() => handleUpgradeSubscription(tier)}
-                      disabled={processingUpgrade}
-                    >
-                      {processingUpgrade ? 'Processing...' : 'Upgrade'}
-                    </button>
-                  )}
-                </div>
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
+      {/* FAQ Section */}
+      <div className="mt-16">
+        <h2 className="text-xl font-bold mb-4">Frequently Asked Questions</h2>
 
-      <div className="bg-white shadow-md rounded-lg p-6">
-        <h2 className="text-2xl font-semibold mb-4">Frequently Asked Questions</h2>
-        
-        <div className="space-y-6">
-          <div>
-            <h3 className="text-lg font-semibold">How do I upgrade my plan?</h3>
-            <p className="mt-1 text-gray-600">
-              Simply click the "Upgrade" button on the plan you wish to subscribe to. You'll be redirected to our secure payment
-              provider to complete your purchase.
+        <div className="space-y-4">
+          <div className="bg-white rounded-md shadow-sm p-4">
+            <h3 className="font-bold">How do I change my plan?</h3>
+            <p className="text-gray-700 mt-1">
+              You can upgrade your plan at any time by clicking on the "Subscribe" button. 
+              To downgrade, please contact our support team.
             </p>
           </div>
-          
-          <div>
-            <h3 className="text-lg font-semibold">What happens if I reach my monthly limit?</h3>
-            <p className="mt-1 text-gray-600">
-              Once you reach your monthly response limit, you won't be able to generate new responses until your plan renews or
-              you upgrade to a higher tier.
+
+          <div className="bg-white rounded-md shadow-sm p-4">
+            <h3 className="font-bold">When will I be billed?</h3>
+            <p className="text-gray-700 mt-1">
+              You'll be billed immediately upon subscribing, and then on the same date each month.
             </p>
           </div>
-          
-          <div>
-            <h3 className="text-lg font-semibold">How do I cancel my subscription?</h3>
-            <p className="mt-1 text-gray-600">
-              You can cancel your subscription at any time by contacting our support team. Your plan will remain active until the
-              end of your billing period.
+
+          <div className="bg-white rounded-md shadow-sm p-4">
+            <h3 className="font-bold">Can I cancel my subscription?</h3>
+            <p className="text-gray-700 mt-1">
+              Yes, you can cancel your subscription at any time. Your plan will remain active until the end of your billing period.
             </p>
           </div>
         </div>

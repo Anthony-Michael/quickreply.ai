@@ -4,6 +4,7 @@ import '../styles/output.css';
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
 import { SessionContextProvider } from '@supabase/auth-helpers-react';
 import Navigation from '../src/components/Navigation';
+import { QueryProvider } from '../src/lib/react-query';
 
 function MyApp({ Component, pageProps }) {
   // Check for development mode from environment variables or process.env.NODE_ENV
@@ -123,12 +124,14 @@ function MyApp({ Component, pageProps }) {
 
   return (
     <SessionContextProvider supabaseClient={supabaseClient} initialSession={pageProps.initialSession}>
-      <div className="min-h-screen bg-gray-50">
-        {!isMockPage(pageProps.pathname) && <Navigation />}
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-          <Component {...pageProps} />
+      <QueryProvider>
+        <div className="min-h-screen bg-gray-50">
+          {!isMockPage(pageProps.pathname) && <Navigation />}
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+            <Component {...pageProps} />
+          </div>
         </div>
-      </div>
+      </QueryProvider>
     </SessionContextProvider>
   );
 }

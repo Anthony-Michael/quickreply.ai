@@ -16,142 +16,37 @@ import {
   Legend,
   ResponsiveContainer,
 } from 'recharts';
+import { Line, Bar, Pie } from 'react-chartjs-2';
+import {
+  Chart as ChartJS,
+  CategoryScale,
+  LinearScale,
+  PointElement,
+  LineElement,
+  BarElement,
+  ArcElement,
+  Title,
+  Tooltip,
+  Legend,
+} from 'chart.js';
+import { useUserProfile, useEmailHistory, useSubscriptionData } from '../lib/react-query';
+import Link from 'next/link';
+import LineChart from './charts/LineChart';
+import BarChart from './charts/BarChart';
+import PieChart from './charts/PieChart';
 
-// Line Chart component with better error handling
-const LineChart = ({ data }) => {
-  // Ensure we have valid data to render
-  if (!data || !data.length) {
-    return (
-      <div className="h-64 w-full flex items-center justify-center bg-gray-50">
-        <p className="text-gray-500">No data available</p>
-      </div>
-    );
-  }
-  
-  return (
-    <ResponsiveContainer width="100%" height={250}>
-      <RechartsLineChart data={data} margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
-        <CartesianGrid strokeDasharray="3 3" />
-        <XAxis dataKey="date" />
-        <YAxis />
-        <Tooltip />
-        <Legend />
-        <Line
-          type="monotone"
-          dataKey="count"
-          name="Emails"
-          stroke="#3b82f6"
-          activeDot={{ r: 8 }}
-        />
-      </RechartsLineChart>
-    </ResponsiveContainer>
-  );
-};
-
-// Update PropTypes to make data optional or provide default props
-LineChart.propTypes = {
-  data: PropTypes.arrayOf(
-    PropTypes.shape({
-      date: PropTypes.string,
-      count: PropTypes.number,
-    })
-  ),
-};
-
-LineChart.defaultProps = {
-  data: [],
-};
-
-// Bar Chart component with better error handling
-const BarChart = ({ data }) => {
-  // Ensure we have valid data to render
-  if (!data || !data.length) {
-    return (
-      <div className="h-64 w-full flex items-center justify-center bg-gray-50">
-        <p className="text-gray-500">No data available</p>
-      </div>
-    );
-  }
-  
-  return (
-    <ResponsiveContainer width="100%" height={250}>
-      <RechartsBarChart data={data} margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
-        <CartesianGrid strokeDasharray="3 3" />
-        <XAxis dataKey="name" />
-        <YAxis />
-        <Tooltip />
-        <Legend />
-        <Bar dataKey="value" name="Emails" fill="#3b82f6" />
-      </RechartsBarChart>
-    </ResponsiveContainer>
-  );
-};
-
-// Update PropTypes for BarChart
-BarChart.propTypes = {
-  data: PropTypes.arrayOf(
-    PropTypes.shape({
-      name: PropTypes.string,
-      value: PropTypes.number,
-    })
-  ),
-};
-
-BarChart.defaultProps = {
-  data: [],
-};
-
-// Pie Chart component with better error handling
-const PieChart = ({ data }) => {
-  // Ensure we have valid data to render
-  if (!data || !data.length) {
-    return (
-      <div className="h-64 w-full flex items-center justify-center bg-gray-50">
-        <p className="text-gray-500">No data available</p>
-      </div>
-    );
-  }
-  
-  const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042'];
-
-  return (
-    <ResponsiveContainer width="100%" height={250}>
-      <RechartsPieChart>
-        <Pie
-          data={data}
-          cx="50%"
-          cy="50%"
-          labelLine={false}
-          outerRadius={80}
-          fill="#8884d8"
-          dataKey="count"
-          nameKey="tone"
-          label={({ tone }) => tone}
-        >
-          {data.map((entry, index) => (
-            <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-          ))}
-        </Pie>
-        <Tooltip />
-        <Legend />
-      </RechartsPieChart>
-    </ResponsiveContainer>
-  );
-};
-
-// Update PropTypes for PieChart
-PieChart.propTypes = {
-  data: PropTypes.arrayOf(
-    PropTypes.shape({
-      tone: PropTypes.string,
-      count: PropTypes.number,
-    })
-  ),
-};
-
-PieChart.defaultProps = {
-  data: [],
-};
+// Register ChartJS components
+ChartJS.register(
+  CategoryScale,
+  LinearScale,
+  PointElement,
+  LineElement,
+  BarElement,
+  ArcElement,
+  Title,
+  Tooltip,
+  Legend
+);
 
 const Dashboard = () => {
   const user = useUser();
@@ -168,6 +63,33 @@ const Dashboard = () => {
     recentEmails: [],
   });
   const [trialDaysRemaining, setTrialDaysRemaining] = useState(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [usageByDay, setUsageByDay] = useState(null);
+  const [toneDistribution, setToneDistribution] = useState(null);
+  
+  // Use React Query hooks to fetch data with caching
+  const { data: profile, isLoading: isProfileLoading } = useUserProfile();
+  const { data: emailHistoryData, isLoading: isHistoryLoading } = useEmailHistory(100, 0, 30);
+  const { data: subscriptionData, isLoading: isSubscriptionLoading } = useSubscriptionData();
+  
+  useEffect(() => {
+    // Only process data when all queries have completed
+    if (!isProfileLoading && !isHistoryLoading && !isSubscriptionLoading) {
+      const emailHistory = emailHistoryData?.data || [];
+      
+      // Process usage data for charts
+      if (emailHistory.length > 0) {
+        setUsageByDay(processUsageByDay(emailHistory));
+        setToneDistribution(processToneDistribution(emailHistory));
+      } else {
+        // Use mock data if no history exists
+        setUsageByDay(generateMockUsageByDay());
+        setToneDistribution(generateMockToneDistribution());
+      }
+      
+      setIsLoading(false);
+    }
+  }, [isProfileLoading, isHistoryLoading, isSubscriptionLoading, emailHistoryData]);
 
   useEffect(() => {
     // Only load dashboard data when user is available
@@ -319,70 +241,74 @@ const Dashboard = () => {
     }
   }
 
-  // Helper function to process real usage data
+  // Process email history to get usage by day
   function processUsageByDay(emailHistory) {
-    const usageMap = {};
+    // Group emails by date
+    const usageByDayMap = {};
     
-    // Initialize last 30 days with zero count
-    for (let i = 30; i >= 0; i--) {
-      const date = new Date();
-      date.setDate(date.getDate() - i);
-      const dateString = date.toISOString().split('T')[0];
-      usageMap[dateString] = 0;
-    }
-    
-    // Count emails by date
-    emailHistory.forEach(email => {
-      const dateString = new Date(email.created_at).toISOString().split('T')[0];
-      if (usageMap[dateString] !== undefined) {
-        usageMap[dateString]++;
-      }
+    emailHistory.forEach((email) => {
+      const date = new Date(email.created_at).toLocaleDateString();
+      usageByDayMap[date] = (usageByDayMap[date] || 0) + 1;
     });
     
-    // Convert to array format for the chart
-    return Object.keys(usageMap).map(date => ({
-      date,
-      count: usageMap[date],
-    }));
-  }
-
-  // Helper function to generate mock usage data
-  function generateMockUsageByDay() {
-    const data = [];
-    for (let i = 30; i >= 0; i--) {
+    // Create an array of the last 7 days
+    const last7Days = [];
+    for (let i = 6; i >= 0; i--) {
       const date = new Date();
       date.setDate(date.getDate() - i);
-      data.push({
-        date: date.toISOString().split('T')[0],
-        count: Math.floor(Math.random() * 5),
-      });
+      last7Days.push(date.toLocaleDateString());
     }
-    return data;
+    
+    // Map the usage data to the last 7 days
+    const labels = [];
+    const values = [];
+    
+    last7Days.forEach((date) => {
+      labels.push(date);
+      values.push(usageByDayMap[date] || 0);
+    });
+    
+    return { labels, values };
+  }
+  
+  // Process email history to get tone distribution
+  function processToneDistribution(emailHistory) {
+    // Count emails by tone
+    const toneMap = {};
+    
+    emailHistory.forEach((email) => {
+      const tone = email.tone_requested || 'not specified';
+      toneMap[tone] = (toneMap[tone] || 0) + 1;
+    });
+    
+    // Convert to labels and values
+    const labels = Object.keys(toneMap);
+    const values = Object.values(toneMap);
+    
+    return { labels, values };
   }
 
-  // Helper function to generate mock tone distribution
-  function generateMockToneDistribution(emailHistory = []) {
-    const tones = ['professional', 'friendly', 'formal', 'empathetic'];
-
-    if (emailHistory && emailHistory.length > 0) {
-      // Count actual tones from email history
-      const toneCounts = emailHistory.reduce((acc, email) => {
-        const tone = email.tone_requested || 'professional';
-        acc[tone] = (acc[tone] || 0) + 1;
-        return acc;
-      }, {});
-
-      return Object.keys(toneCounts).map(tone => ({
-        tone,
-        count: toneCounts[tone],
-      }));
+  // Generate mock usage data for new users
+  function generateMockUsageByDay() {
+    const labels = [];
+    const values = [];
+    
+    for (let i = 6; i >= 0; i--) {
+      const date = new Date();
+      date.setDate(date.getDate() - i);
+      labels.push(date.toLocaleDateString());
+      values.push(Math.floor(Math.random() * 5)); // Random value between 0 and 4
     }
+    
+    return { labels, values };
+  }
 
-    // Generate random distribution with valid data structure for PieChart
-    return tones.map(tone => ({
-      tone,
-      count: Math.floor(Math.random() * 10) + 1,
-    }));
+  // Generate mock tone distribution data for new users
+  function generateMockToneDistribution() {
+    const labels = ['professional', 'friendly', 'formal', 'empathetic', 'concise'];
+    const values = [5, 3, 2, 4, 1]; // Example distribution
+    
+    return { labels, values };
   }
 
   if (loading) {
@@ -402,6 +328,17 @@ const Dashboard = () => {
       )}
 
       <h1 className="text-xl font-bold mb-3">Dashboard</h1>
+
+      {(user?.subscription_tier === 'free' || user?.subscription_tier === 'trial') && (
+        <div className="mb-4">
+          <Link 
+            href="/subscription" 
+            className="inline-block px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-500 transition-colors duration-150 font-medium text-sm"
+          >
+            Upgrade to Pro — Get {user?.subscription_tier === 'free' ? '10x' : '4x'} More Responses!
+          </Link>
+        </div>
+      )}
 
       {trialDaysRemaining !== null && (
         <div className="mb-4 p-3 bg-yellow-100 text-yellow-800 rounded-md">
@@ -443,7 +380,7 @@ const Dashboard = () => {
             <div className="bg-white p-3 rounded-lg shadow-sm md:col-span-2">
               <h3 className="text-md font-medium mb-2">Email Activity (Last 7 Days)</h3>
               <div className="h-60">
-                <LineChart data={stats.usageByDay.slice(-7)} />
+                <LineChart data={usageByDay} />
               </div>
             </div>
 
@@ -451,7 +388,7 @@ const Dashboard = () => {
             <div className="bg-white p-3 rounded-lg shadow-sm">
               <h3 className="text-md font-medium mb-2">Response Tone Distribution</h3>
               <div className="h-60">
-                <PieChart data={stats.toneDistribution} />
+                <PieChart data={toneDistribution} />
               </div>
             </div>
           </div>
@@ -462,7 +399,7 @@ const Dashboard = () => {
             <div className="bg-white p-3 rounded-lg shadow-sm">
               <h3 className="text-md font-medium mb-2">Monthly Activity</h3>
               <div className="h-60">
-                <BarChart data={stats.usageByDay.slice(-30)} />
+                <BarChart data={usageByDay} />
               </div>
             </div>
 

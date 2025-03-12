@@ -104,6 +104,13 @@ const Navigation = () => {
           </div>
           <div className="hidden md:block">
             <div className="ml-1 flex items-center">
+              <Link
+                href="/subscription"
+                className="px-1.5 py-0.5 mr-2 border border-transparent text-xs font-medium rounded-sm
+                          text-white bg-green-600 hover:bg-green-500 transition-colors duration-150"
+              >
+                Upgrade to Pro
+              </Link>
               <span className="text-xs mr-1">
                 {user?.email || (devMode ? 'dev@example.com' : '')}
                 {devMode && <span className="bg-yellow-400 text-xs text-black px-1 ml-1 rounded">DEV</span>}
@@ -172,6 +179,12 @@ const Navigation = () => {
               className={`block px-3 py-2 rounded-md text-sm font-medium ${isActive('/profile')}`}
             >
               Profile
+            </Link>
+            <Link
+              href="/subscription"
+              className="block px-3 py-2 rounded-md text-sm font-medium bg-green-600 text-white hover:bg-green-500 my-2"
+            >
+              Upgrade to Pro
             </Link>
             <div className="mt-3 flex flex-col">
               <span className="text-sm mb-2">
