@@ -1,6 +1,6 @@
-# Contributing to QuickReply AI
+# Contributing to ReplyRocket.io
 
-We love your input! We want to make contributing to QuickReply AI as easy and transparent as possible, whether it's:
+We love your input! We want to make contributing to ReplyRocket.io as easy and transparent as possible, whether it's:
 
 - Reporting a bug
 - Discussing the current state of the code
@@ -57,9 +57,9 @@ Types:
 
 In short, when you submit code changes, your submissions are understood to be under the same [MIT License](http://choosealicense.com/licenses/mit/) that covers the project. Feel free to contact the maintainers if that's a concern.
 
-## Report bugs using GitHub's [issue tracker](https://github.com/Anthony-Michael/quickreply-ai/issues)
+## Report bugs using GitHub's [issue tracker](https://github.com/Anthony-Michael/ReplyRocket.io/issues)
 
-We use GitHub issues to track public bugs. Report a bug by [opening a new issue](https://github.com/Anthony-Michael/quickreply-ai/issues/new/choose).
+We use GitHub issues to track public bugs. Report a bug by [opening a new issue](https://github.com/Anthony-Michael/ReplyRocket.io/issues/new/choose).
 
 ## Write bug reports with detail, background, and sample code
 

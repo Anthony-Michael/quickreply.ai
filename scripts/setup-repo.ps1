@@ -1,7 +1,7 @@
 # PowerShell script to configure GitHub repository settings
 
 # Repository settings
-$repo = "Anthony-Michael/quickreply-ai"
+$repo = "Anthony-Michael/ReplyRocket.io"
 
 # Enable vulnerability alerts
 gh api `

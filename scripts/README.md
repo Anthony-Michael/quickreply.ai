@@ -1,6 +1,6 @@
 # Database Security Scripts
 
-This directory contains scripts for managing and testing database security policies in the QuickReply.ai application.
+This directory contains scripts for managing and testing database security policies in the ReplyRocket.io application.
 
 ## Overview
 

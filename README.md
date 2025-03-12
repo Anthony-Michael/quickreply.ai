@@ -21,8 +21,8 @@ This repository has been configured for automatic deployment with Vercel.
 
 1. Clone the repository:
 ```bash
-git clone https://github.com/Anthony-Michael/quickreply-ai.git
-cd quickreply-ai
+git clone https://github.com/Anthony-Michael/ReplyRocket.io.git
+cd ReplyRocket.io
 ```
 
 2. Install dependencies:

@@ -1,8 +1,8 @@
-# Lazy Loading Implementation in QuickReply.ai
+# Lazy Loading Implementation in ReplyRocket.io
 
 ## Overview
 
-This document explains the lazy loading implementation in QuickReply.ai, which improves initial load time by only loading components when they are needed rather than all at once.
+This document explains the lazy loading implementation in ReplyRocket.io, which improves initial load time by only loading components when they are needed rather than all at once.
 
 ## Implementation Details
 

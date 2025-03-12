@@ -19,7 +19,7 @@ export default function MockEntry() {
   return (
     <div className="min-h-screen flex flex-col items-center justify-center bg-gray-100 p-4">
       <div className="max-w-md w-full bg-white rounded-lg shadow-lg p-8 text-center">
-        <h1 className="text-2xl font-bold text-blue-600 mb-4">QuickReply.ai Mock Mode</h1>
+        <h1 className="text-2xl font-bold text-blue-600 mb-4">ReplyRocket.io Mock Mode</h1>
         
         <div className="mb-6 p-4 bg-blue-50 rounded-lg">
           <p className="text-blue-800">
